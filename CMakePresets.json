@@ -7,9 +7,7 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined,leak -fno-omit-frame-pointer -fno-sanitize-recover=all",
-        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined,leak"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
     {
@@ -18,6 +16,30 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "clang++-debug-UB-A-L",
+      "inherits": "clang++-debug",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined,leak -fno-omit-frame-pointer -fno-sanitize-recover=all",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined,leak"
+      }
+    },
+    {
+      "name": "clang++-debug-T",
+      "inherits": "clang++-debug",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread"
+      }
+    },
+    {
+      "name": "clang++-debug-M",
+      "inherits": "clang++-debug",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory"
       }
     },
     {
