@@ -4,5 +4,41 @@ project(Web-PTT LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include(FetchContent)
 
+set(BOOST_INCLUDE_LIBRARIES asio beast uuid system CACHE STRING "" FORCE)
+set(BOOST_ENABLE_CMAKE ON CACHE BOOL "" FORCE)
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+
+FetchContent_Declare(
+    boost
+    URL https://github.com/boostorg/boost/releases/download/boost-1.91.0-1/boost-1.91.0-1-cmake.zip
+)
+
+FetchContent_Declare(
+    libdatachannel
+    GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
+    GIT_TAG v0.24.5
+)
+
+FetchContent_Declare(
+    spdlog
+    URL https://github.com/gabime/spdlog/archive/refs/tags/v1.17.0.zip
+)
+
+FetchContent_MakeAvailable(boost libdatachannel spdlog)
+
+find_package(OpenSSL REQUIRED)
 add_executable(backend "src/main.cpp")
+target_link_libraries(backend PRIVATE 
+    Boost::asio
+    Boost::beast
+    Boost::uuid
+    datachannel
+    spdlog::spdlog
+    OpenSSL::SSL
+    OpenSSL::Crypto
+)
