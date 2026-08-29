@@ -29,16 +29,22 @@ FetchContent_Declare(
     URL https://github.com/gabime/spdlog/archive/refs/tags/v1.17.0.zip
 )
 
-FetchContent_MakeAvailable(boost libdatachannel spdlog)
+FetchContent_Declare(
+    glaze
+    URL https://github.com/stephenberry/glaze/archive/refs/tags/v7.9.1.zip
+)
+
+FetchContent_MakeAvailable(boost libdatachannel spdlog glaze)
 
 find_package(OpenSSL REQUIRED)
-add_executable(backend "src/main.cpp")
+add_executable(backend "src/main.cpp" "src/api/Listener.cpp" "src/api/Session.cpp")
 target_link_libraries(backend PRIVATE 
     Boost::asio
     Boost::beast
     Boost::uuid
     datachannel
     spdlog::spdlog
+    glaze::glaze
     OpenSSL::SSL
     OpenSSL::Crypto
 )
