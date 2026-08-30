@@ -1,7 +1,7 @@
 #include "Listener.hpp"
-#include "Session.hpp"
+#include "HttpSession.hpp"
 
-namespace CAM::Signaling {
+namespace CAM::API {
     constexpr int kPort = 8080;
     constexpr auto kIPAddress = "127.0.0.1";
     
@@ -9,7 +9,7 @@ namespace CAM::Signaling {
     : acceptor_(io_context) {}
     
     boost::asio::awaitable<void> Listener::listen() {
-        auto io_context = acceptor_.get_executor();
+        auto executor = acceptor_.get_executor();
         boost::system::error_code errc;
 
         tcp::endpoint endpoint(boost::asio::ip::make_address(kIPAddress, errc), kPort);
@@ -33,8 +33,8 @@ namespace CAM::Signaling {
         while (true) {
             tcp::socket socket = co_await acceptor_.async_accept(boost::asio::redirect_error(boost::asio::use_awaitable, errc));
             if (!errc) {
-                auto session = std::make_shared<Session>(std::move(socket));
-                co_spawn(io_context, session->start(), boost::asio::detached);
+                auto http_session = std::make_shared<HttpSession>(std::move(socket));
+                co_spawn(executor, http_session->start(), boost::asio::detached);
             } else {
                 spdlog::error("Accept error: {}", errc.message());
             }

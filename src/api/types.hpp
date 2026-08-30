@@ -2,11 +2,11 @@
 
 #include <string>
 
-namespace CAM::Signaling {
+namespace CAM::API {
 
         struct SignalingMessage {
         std::string type;
         std::string sdp;
     };
-    
+
 } //namespace CAM::Signaling

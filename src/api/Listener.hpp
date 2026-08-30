@@ -4,7 +4,7 @@
 #include "boost/asio/any_io_executor.hpp"
 #include <spdlog/spdlog.h>
 
-namespace CAM::Signaling {
+namespace CAM::API {
     using tcp = boost::asio::ip::tcp;
     
     class Listener {
