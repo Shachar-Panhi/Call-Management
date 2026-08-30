@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-namespace CAM::Signaling {
+namespace CAM::API {
     using TCP = boost::asio::ip::tcp;
     namespace Websocket = boost::beast::websocket;
     namespace HTTP = boost::beast::http;

@@ -1,7 +1,7 @@
 #include "HttpSession.hpp"
 #include "WebsocketSession.hpp"
 
-namespace CAM::Signaling {
+namespace CAM::API {
 
     HttpSession::HttpSession(TCP::socket socket)
     : executor_(socket.get_executor())

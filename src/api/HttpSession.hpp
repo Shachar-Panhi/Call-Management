@@ -5,7 +5,7 @@
 #include <boost/beast/http.hpp>
 #include <spdlog/spdlog.h>
 
-namespace CAM::Signaling {
+namespace CAM::API {
     using  TCP = boost::asio::ip::tcp;
     
     class HttpSession : public std::enable_shared_from_this<HttpSession> {

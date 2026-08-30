@@ -3,7 +3,7 @@
 #include <glaze/glaze.hpp>
 #include <variant>
 
-namespace CAM::Signaling { 
+namespace CAM::API { 
     WebsocketSession::WebsocketSession(TCP::socket socket)
     : ws_(std::move(socket)) {}
     

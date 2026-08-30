@@ -1,7 +1,7 @@
 #include "Listener.hpp"
 #include "HttpSession.hpp"
 
-namespace CAM::Signaling {
+namespace CAM::API {
     constexpr int kPort = 8080;
     constexpr auto kIPAddress = "127.0.0.1";
     
