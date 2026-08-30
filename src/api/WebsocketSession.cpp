@@ -17,10 +17,17 @@ namespace CAM::API {
             co_return;
         }
 
-        spdlog::info("WebSocket client connected successfully");
+        boost::system::error_code ep_errc;                    
+        auto remote_endpoint = ws_.next_layer().socket().remote_endpoint(ep_errc);
+        if (!ep_errc) {
+            spdlog::info("WebSocket client connected successfully from {}:{}", 
+                         remote_endpoint.address().to_string(), 
+                         remote_endpoint.port());
+        } else {
+            spdlog::info("WebSocket client connected successfully (unknown endpoint)");
+        }
 
         boost::beast::flat_buffer buffer;
-
         while (ws_.is_open()) {
             buffer.clear();
 
@@ -28,7 +35,13 @@ namespace CAM::API {
             
             if (errc) {
                 if (errc == Websocket::error::closed || errc == boost::asio::error::eof) {
-                    spdlog::info("WebSocket client disconnected cleanly");
+                    if (!ep_errc) {
+                        spdlog::info("WebSocket client disconnected from {}:{}", 
+                                    remote_endpoint.address().to_string(), 
+                                    remote_endpoint.port());
+                    } else {
+                        spdlog::info("WebSocket client connected successfully (unknown endpoint)");
+                    }
                 } else {
                     spdlog::error("WebSocket read error: {}", errc.message());
                 }

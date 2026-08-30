@@ -12,7 +12,15 @@ namespace CAM::API {
         boost::beast::flat_buffer buffer;
         HTTP::request<HTTP::string_body> req;
         
-        spdlog::info("client connected successfully");
+        boost::system::error_code ep_errc;                    
+        auto remote_endpoint = stream_.socket().remote_endpoint(ep_errc);
+        if (!ep_errc) {
+            spdlog::info("client connected successfully from {}:{}", 
+                         remote_endpoint.address().to_string(), 
+                         remote_endpoint.port());
+        } else {
+            spdlog::info("client connected successfully (unknown endpoint)");
+        }
 
         while (stream_.socket().is_open()) {
             HTTP::request<HTTP::string_body> req;   
@@ -28,7 +36,13 @@ namespace CAM::API {
 
             if (errc) {
                 if (errc == HTTP::error::end_of_stream || errc == boost::asio::error::connection_reset) {
-                    spdlog::info("client disconnected");
+                    if (!ep_errc) {
+                        spdlog::info("client disconnected from {}:{}", 
+                                    remote_endpoint.address().to_string(), 
+                                    remote_endpoint.port());
+                    } else {
+                        spdlog::info("client disconnected (unknown endpoint)");
+                    }
                 } else {
                     spdlog::error("read error: {}", errc.message());
                 }
