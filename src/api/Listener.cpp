@@ -9,7 +9,7 @@ namespace CAM::API {
     : acceptor_(io_context) {}
     
     boost::asio::awaitable<void> Listener::listen() {
-        auto io_context = acceptor_.get_executor();
+        auto executor = acceptor_.get_executor();
         boost::system::error_code errc;
 
         tcp::endpoint endpoint(boost::asio::ip::make_address(kIPAddress, errc), kPort);
@@ -34,7 +34,7 @@ namespace CAM::API {
             tcp::socket socket = co_await acceptor_.async_accept(boost::asio::redirect_error(boost::asio::use_awaitable, errc));
             if (!errc) {
                 auto http_session = std::make_shared<HttpSession>(std::move(socket));
-                co_spawn(io_context, http_session->start(), boost::asio::detached);
+                co_spawn(executor, http_session->start(), boost::asio::detached);
             } else {
                 spdlog::error("Accept error: {}", errc.message());
             }
