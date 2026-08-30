@@ -1,17 +1,17 @@
-#include "Session.hpp"
+#include "WebsocketSession.hpp"
 #include "types.hpp"
 #include <glaze/glaze.hpp>
 #include <variant>
 
 namespace CAM::Signaling { 
-    Session::Session(tcp::socket socket)
+    WebsocketSession::WebsocketSession(TCP::socket socket)
     : ws_(std::move(socket)) {}
     
-    boost::asio::awaitable<void> Session::start() {
+    boost::asio::awaitable<void> WebsocketSession::start(HTTP::request<HTTP::string_body> req) {
         auto self = shared_from_this();
         boost::system::error_code errc;                    
         
-        co_await ws_.async_accept(boost::asio::redirect_error(boost::asio::use_awaitable, errc));
+        co_await ws_.async_accept(req, boost::asio::redirect_error(boost::asio::use_awaitable, errc));
         if (errc) {
             spdlog::error("WebSocket accept error: {}", errc.message());
             co_return;
@@ -27,7 +27,7 @@ namespace CAM::Signaling {
             co_await ws_.async_read(buffer, boost::asio::redirect_error(boost::asio::use_awaitable, errc));
             
             if (errc) {
-                if (errc == websocket::error::closed || errc == boost::asio::error::eof) {
+                if (errc == Websocket::error::closed || errc == boost::asio::error::eof) {
                     spdlog::info("WebSocket client disconnected cleanly");
                 } else {
                     spdlog::error("WebSocket read error: {}", errc.message());
@@ -40,7 +40,7 @@ namespace CAM::Signaling {
         }
     }
 
-boost::asio::awaitable<void> Session::handle_message(const std::string& message) {
+    boost::asio::awaitable<void> WebsocketSession::handle_message(const std::string& message) {
         SignalingMessage sig_msg;
         auto parse_error = glz::read_json(sig_msg, message);
         
@@ -61,8 +61,12 @@ boost::asio::awaitable<void> Session::handle_message(const std::string& message)
                 if (auto self = weak_self.lock()) {                    
                     SignalingMessage answer_msg{"answer", std::string(description)};
                     std::string answer_json;
-                    glz::write_json(answer_msg, answer_json);
-                    
+                    auto errc = glz::write_json(answer_msg, answer_json);
+                    if (errc) {
+                        spdlog::info("parsing error: {}", errc.custom_error_message);
+                        return;
+                    }
+
                     boost::asio::co_spawn(self->ws_.get_executor(), self->send_message(answer_json), boost::asio::detached);
                 }
             });
@@ -82,7 +86,7 @@ boost::asio::awaitable<void> Session::handle_message(const std::string& message)
         co_return;
     }
 
-    boost::asio::awaitable<void> Session::send_message(std::string message) {
+    boost::asio::awaitable<void> WebsocketSession::send_message(std::string message) {
         boost::system::error_code errc;
         
         ws_.text(true);

@@ -1,5 +1,5 @@
 #include "Listener.hpp"
-#include "Session.hpp"
+#include "HttpSession.hpp"
 
 namespace CAM::Signaling {
     constexpr int kPort = 8080;
@@ -33,8 +33,8 @@ namespace CAM::Signaling {
         while (true) {
             tcp::socket socket = co_await acceptor_.async_accept(boost::asio::redirect_error(boost::asio::use_awaitable, errc));
             if (!errc) {
-                auto session = std::make_shared<Session>(std::move(socket));
-                co_spawn(io_context, session->start(), boost::asio::detached);
+                auto http_session = std::make_shared<HttpSession>(std::move(socket));
+                co_spawn(io_context, http_session->start(), boost::asio::detached);
             } else {
                 spdlog::error("Accept error: {}", errc.message());
             }

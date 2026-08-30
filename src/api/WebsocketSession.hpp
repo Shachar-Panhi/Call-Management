@@ -9,18 +9,19 @@
 #include <string>
 
 namespace CAM::Signaling {
-    using tcp = boost::asio::ip::tcp;
-    namespace websocket = boost::beast::websocket;
+    using TCP = boost::asio::ip::tcp;
+    namespace Websocket = boost::beast::websocket;
+    namespace HTTP = boost::beast::http;
 
-    class Session : public std::enable_shared_from_this<Session> {
+    class WebsocketSession : public std::enable_shared_from_this<WebsocketSession> {
     public: 
-        explicit Session(tcp::socket socket);
-        boost::asio::awaitable<void> start();
+        explicit WebsocketSession(TCP::socket);
+        boost::asio::awaitable<void> start(HTTP::request<HTTP::string_body> req);
         boost::asio::awaitable<void> handle_message(const std::string& message);
         boost::asio::awaitable<void> send_message(const std::string message);
 
     private:
-        websocket::stream<boost::beast::tcp_stream> ws_;
+        Websocket::stream<boost::beast::tcp_stream> ws_;
         std::shared_ptr<rtc::PeerConnection> pc_;
     };
 }
