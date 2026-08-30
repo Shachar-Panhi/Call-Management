@@ -13,7 +13,6 @@ namespace CAM::API {
         explicit HttpSession(TCP::socket);
         boost::asio::awaitable<void> start();
     private:
-        boost::asio::any_io_executor executor_;
         boost::beast::tcp_stream stream_;
     };
 
