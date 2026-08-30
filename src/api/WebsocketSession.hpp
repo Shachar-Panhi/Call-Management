@@ -17,7 +17,6 @@ namespace CAM::API {
     public: 
         explicit WebsocketSession(TCP::socket);
         boost::asio::awaitable<void> start(HTTP::request<HTTP::string_body> req);
-        boost::asio::awaitable<void> handle_message(const std::string& message);
         boost::asio::awaitable<void> send_message(const std::string message);
 
     private:
