@@ -13,14 +13,16 @@ namespace CAM::API {
     namespace Websocket = boost::beast::websocket;
     namespace HTTP = boost::beast::http;
 
+    class WebsocketManager;
+
     class WebsocketSession : public std::enable_shared_from_this<WebsocketSession> {
     public: 
-        explicit WebsocketSession(TCP::socket);
+        WebsocketSession(TCP::socket, std::shared_ptr<WebsocketManager> manager);
         boost::asio::awaitable<void> start(HTTP::request<HTTP::string_body> req);
         boost::asio::awaitable<void> send_message(const std::string message);
 
     private:
         Websocket::stream<boost::beast::tcp_stream> ws_;
-        std::shared_ptr<rtc::PeerConnection> pc_;
+        std::shared_ptr<WebsocketManager> manager_;
     };
 }

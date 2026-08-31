@@ -1,13 +1,11 @@
-#include <boost/asio.hpp>
-#include <spdlog/spdlog.h>
-#include <rtc/rtc.hpp>
 #include "api/Listener.hpp"
-#include <memory>
+#include "api/WebsocketManager.hpp"
 
 int main() {
-    boost::asio::io_context io_context{1};
+    boost::asio::io_context io_context;
 
-    auto listener = std::make_shared<CAM::API::Listener>(io_context.get_executor());
+    std::shared_ptr<CAM::API::WebsocketManager> manager = std::make_shared<CAM::API::WebsocketManager>();
+    auto listener = std::make_shared<CAM::API::Listener>(io_context.get_executor(), std::move(manager));
     boost::asio::co_spawn(io_context, listener->listen(), boost::asio::detached);
 
     io_context.run();
