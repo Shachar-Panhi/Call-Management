@@ -18,6 +18,8 @@ namespace CAM::API {
     public:
         explicit Coordinator(std::shared_ptr<WebsocketManager> manager);
         Callback process_callback(); 
+        WebsocketSession::SessionCallback get_join_callback();
+        WebsocketSession::SessionCallback get_leave_callback();
     private:
         std::shared_ptr<WebsocketManager> manager_;    
     };
