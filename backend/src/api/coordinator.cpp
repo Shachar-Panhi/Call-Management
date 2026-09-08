@@ -5,7 +5,7 @@
 
 
 namespace CAM::API {
-    Coordinator::Coordinator() : manager_(std::make_shared<WebsocketManager>()) {}
+    Coordinator::Coordinator(std::shared_ptr<WebsocketManager> manager) : manager_(std::move(manager)) {}
 
     Callback Coordinator::process_callback() {
         return [weak_manager = std::weak_ptr<WebsocketManager>(manager_)](TCP::socket socket, HTTP::request<HTTP::string_body> req)

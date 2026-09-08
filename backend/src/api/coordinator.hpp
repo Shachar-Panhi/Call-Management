@@ -16,7 +16,7 @@ namespace CAM::API {
 
     class Coordinator {
     public:
-        Coordinator();
+        explicit Coordinator(std::shared_ptr<WebsocketManager> manager);
         Callback process_callback(); 
     private:
         std::shared_ptr<WebsocketManager> manager_;    
