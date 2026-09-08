@@ -1,20 +1,22 @@
 #pragma once
 
 #include <boost/asio.hpp>
-#include "WebsocketManager.hpp"
+#include <boost/beast.hpp>
 #include "boost/asio/any_io_executor.hpp"
 #include <spdlog/spdlog.h>
 
 namespace CAM::API {
-    using tcp = boost::asio::ip::tcp;
+    using TCP = boost::asio::ip::tcp;
+    namespace HTTP = boost::beast::http;
+    
+    using Callback = std::function<void(TCP::socket, HTTP::request<HTTP::string_body>)>;
     
     class Listener {
     public: 
-        Listener(const boost::asio::any_io_executor&, std::shared_ptr<WebsocketManager> manager);
+        Listener(const boost::asio::any_io_executor&, Callback callback);
         boost::asio::awaitable<void> listen();
     private:
-        tcp::acceptor acceptor_;
-        std::shared_ptr<WebsocketManager> manager_;
-
+        TCP::acceptor acceptor_;
+        Callback callback_;
     };
 }

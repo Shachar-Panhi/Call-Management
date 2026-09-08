@@ -5,8 +5,8 @@
 
 namespace CAM::API {
 
-    HttpSession::HttpSession(TCP::socket socket, std::shared_ptr<WebsocketManager> manager)
-    : stream_(std::move(socket)), manager_(std::move(manager)) {}
+    HttpSession::HttpSession(TCP::socket socket, Callback callback)
+    : stream_(std::move(socket)), callback_(std::move(callback)) {}
 
     boost::asio::awaitable<void> HttpSession::start() {
         auto self = shared_from_this();
@@ -31,8 +31,7 @@ namespace CAM::API {
             co_await HTTP::async_read(stream_, buffer, req, boost::asio::redirect_error(boost::asio::use_awaitable, errc));
             
             if (Websocket::is_upgrade(req)) {
-                auto websocket_session = std::make_shared<WebsocketSession>(stream_.release_socket(), manager_);
-                co_spawn(stream_.get_executor(), websocket_session->start(std::move(req)), boost::asio::detached);
+                callback_(stream_.release_socket(), std::move(req));
                 break;
             }
 
