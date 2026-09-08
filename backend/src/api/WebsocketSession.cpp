@@ -1,10 +1,11 @@
 #include "WebsocketSession.hpp"
+#include "WebsocketManager.hpp"
 #include "types.hpp"
 #include <variant>
 
 namespace CAM::API { 
-    WebsocketSession::WebsocketSession(TCP::socket socket)
-    : ws_(std::move(socket)) {}
+    WebsocketSession::WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave)
+    : ws_(std::move(socket)), on_join_(std::move(on_join)), on_leave_(std::move(on_leave)) {}
     
     boost::asio::awaitable<void> WebsocketSession::start(HTTP::request<HTTP::string_body> req) {
         auto self = shared_from_this();
@@ -15,6 +16,8 @@ namespace CAM::API {
             spdlog::error("WebSocket accept error: {}", errc.message());
             co_return;
         }
+
+        on_join_(self);
 
         boost::system::error_code ep_errc;                    
         auto remote_endpoint = ws_.next_layer().socket().remote_endpoint(ep_errc);
@@ -50,6 +53,7 @@ namespace CAM::API {
             std::string message = boost::beast::buffers_to_string(buffer.data());
             co_await send_message(message);
         }
+        on_leave_(self);
     }
 
     boost::asio::awaitable<void> WebsocketSession::send_message(std::string message) {

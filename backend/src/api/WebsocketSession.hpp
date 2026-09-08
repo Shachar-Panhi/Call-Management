@@ -7,20 +7,26 @@
 #include <rtc/rtc.hpp>
 #include <memory>
 #include <string>
+#include <functional>
 
 namespace CAM::API {
     using TCP = boost::asio::ip::tcp;
     namespace Websocket = boost::beast::websocket;
     namespace HTTP = boost::beast::http;
 
+    class WebsocketManager;
+
     class WebsocketSession : public std::enable_shared_from_this<WebsocketSession> {
     public: 
-        explicit WebsocketSession(TCP::socket);
+        using SessionCallback = std::function<void(std::shared_ptr<WebsocketSession>)>;
+        
+        explicit WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave);
         boost::asio::awaitable<void> start(HTTP::request<HTTP::string_body> req);
-        boost::asio::awaitable<void> send_message(const std::string message);
+        boost::asio::awaitable<void> send_message(std::string message);
 
     private:
         Websocket::stream<boost::beast::tcp_stream> ws_;
-        std::shared_ptr<rtc::PeerConnection> pc_;
+        SessionCallback on_join_;
+        SessionCallback on_leave_;
     };
 }
