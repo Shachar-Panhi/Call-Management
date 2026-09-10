@@ -7,6 +7,14 @@ namespace CAM::API {
     WebsocketSession::WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave)
     : ws_(std::move(socket)), on_join_(std::move(on_join)), on_leave_(std::move(on_leave)) {}
     
+    void WebsocketSession::set_message_callback(MessageCallback callback) {
+        on_message_ = std::move(callback);
+    }
+
+    void WebsocketSession::dispatch_message(std::string message) {
+        boost::asio::co_spawn(ws_.get_executor(), send_message(std::move(message)), boost::asio::detached);
+    }
+
     boost::asio::awaitable<void> WebsocketSession::start(HTTP::request<HTTP::string_body> req) {
         auto self = shared_from_this();
         boost::system::error_code errc;                    
@@ -25,8 +33,6 @@ namespace CAM::API {
             spdlog::info("WebSocket client connected successfully from {}:{}", 
                          remote_endpoint.address().to_string(), 
                          remote_endpoint.port());
-        } else {
-            spdlog::info("WebSocket client connected successfully (unknown endpoint)");
         }
 
         boost::beast::flat_buffer buffer;
@@ -36,23 +42,16 @@ namespace CAM::API {
             co_await ws_.async_read(buffer, boost::asio::redirect_error(boost::asio::use_awaitable, errc));
             
             if (errc) {
-                if (errc == Websocket::error::closed || errc == boost::asio::error::eof) {
-                    if (!ep_errc) {
-                        spdlog::info("WebSocket client disconnected from {}:{}", 
-                                    remote_endpoint.address().to_string(), 
-                                    remote_endpoint.port());
-                    } else {
-                        spdlog::info("WebSocket client connected successfully (unknown endpoint)");
-                    }
-                } else {
-                    spdlog::error("WebSocket read error: {}", errc.message());
-                }
                 break;
             }
 
             std::string message = boost::beast::buffers_to_string(buffer.data());
-            co_await send_message(message);
+            
+            if (on_message_) {
+                on_message_(message);
+            }
         }
+        
         on_leave_(self);
     }
 

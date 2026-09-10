@@ -37,7 +37,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(boost libdatachannel spdlog glaze)
 
 find_package(OpenSSL REQUIRED)
-add_executable(backend "src/main.cpp" "src/api/Listener.cpp" "src/api/WebsocketSession.cpp" "src/api/HttpSession.cpp" "src/api/WebsocketManager.cpp" "src/api/coordinator.cpp")
+add_executable(backend "src/main.cpp" "src/api/Listener.cpp" "src/api/WebsocketSession.cpp" "src/api/HttpSession.cpp" "src/api/WebsocketManager.cpp" "src/api/coordinator.cpp" "src/api/PeerConnection.cpp")
 target_link_libraries(backend PRIVATE 
     Boost::asio
     Boost::beast
