@@ -1,5 +1,5 @@
 #include "WebsocketManager.hpp"
-#include "spdlog/spdlog.h"
+#include <spdlog/spdlog.h>
 
 namespace CAM::API {
     WebsocketManager::WebsocketManager() = default;
