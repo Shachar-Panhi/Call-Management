@@ -12,7 +12,39 @@ namespace CAM::API {
     }
 
     void WebsocketSession::dispatch_message(std::string message) {
-        boost::asio::co_spawn(ws_.get_executor(), send_message(std::move(message)), boost::asio::detached);
+        boost::asio::post(ws_.get_executor(), [self = shared_from_this(), msg = std::move(message)]()
+        {
+            self->queue_message(msg);
+        });
+    }
+
+    void WebsocketSession::queue_message(std::string message) {
+        write_queue_.push(std::move(message));
+        
+        if (!is_writing_) {
+            is_writing_ = true;
+            boost::asio::co_spawn(ws_.get_executor(), process_write_queue(), boost::asio::detached);
+        }
+    }
+
+    boost::asio::awaitable<void> WebsocketSession::process_write_queue() {
+        auto self = shared_from_this();
+        
+        while (!write_queue_.empty()) {
+            std::string message = write_queue_.front();
+            boost::system::error_code errc;
+            
+            co_await ws_.async_write(boost::asio::buffer(message), boost::asio::redirect_error(boost::asio::use_awaitable, errc));
+            
+            if (errc) {
+                spdlog::error("Websocket write error {}", errc.message());
+                break;
+            }
+            
+            write_queue_.pop();
+        }
+        
+        is_writing_ = false;
     }
 
     boost::asio::awaitable<void> WebsocketSession::start(HTTP::request<HTTP::string_body> req) {
@@ -21,7 +53,7 @@ namespace CAM::API {
         
         co_await ws_.async_accept(req, boost::asio::redirect_error(boost::asio::use_awaitable, errc));
         if (errc) {
-            spdlog::error("WebSocket accept error: {}", errc.message());
+            spdlog::error("Websocket accept error {}", errc.message());
             co_return;
         }
 
@@ -53,15 +85,5 @@ namespace CAM::API {
         }
         
         on_leave_(self);
-    }
-
-    boost::asio::awaitable<void> WebsocketSession::send_message(std::string message) {
-        boost::system::error_code errc;
-        
-        co_await ws_.async_write(boost::asio::buffer(message), boost::asio::redirect_error(boost::asio::use_awaitable, errc));
-        
-        if (errc) {
-            spdlog::error("WebSocket write error: {}", errc.message());
-        }
     }
 }
