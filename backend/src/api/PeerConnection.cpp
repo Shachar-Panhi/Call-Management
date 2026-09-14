@@ -63,7 +63,12 @@ namespace CAM::API {
         spdlog::info("peer connection received {}", message);
         
        if (message == "start") {
-            auto data_channel = rtc_connection_->createDataChannel("chat");
+            data_channel_ = rtc_connection_->createDataChannel("chat");
+            
+            data_channel_->onOpen([]() {
+                spdlog::info("datachannel opened successfully");
+            });
+            
             rtc_connection_->setLocalDescription();
             return;
         }

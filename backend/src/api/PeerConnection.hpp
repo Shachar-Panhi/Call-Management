@@ -17,6 +17,7 @@ namespace CAM::API {
 
     private:
         std::shared_ptr<rtc::PeerConnection> rtc_connection_;
+        std::shared_ptr<rtc::DataChannel> data_channel_;
         SignalingCallback send_signaling_;
     };
 }
