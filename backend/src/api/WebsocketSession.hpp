@@ -4,6 +4,7 @@
 #include <boost/beast.hpp>
 #include <boost/beast/websocket.hpp>
 #include <spdlog/spdlog.h>
+#include <boost/uuid.hpp>
 #include <memory>
 #include <string>
 #include <functional>
@@ -36,5 +37,6 @@ namespace CAM::API {
         
         std::queue<std::string> write_queue_;
         bool is_writing_ = false;
+        std::string session_id_;
     };
 }

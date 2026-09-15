@@ -1,11 +1,12 @@
 #include "WebsocketSession.hpp"
 #include "WebsocketManager.hpp"
-#include "types.hpp"
-#include <variant>
 
 namespace CAM::API { 
     WebsocketSession::WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave)
-    : ws_(std::move(socket)), on_join_(std::move(on_join)), on_leave_(std::move(on_leave)) {}
+    : ws_(std::move(socket)), on_join_(std::move(on_join)), on_leave_(std::move(on_leave)) {
+        boost::uuids::uuid uuid = boost::uuids::random_generator()();
+        session_id_ = boost::uuids::to_string(uuid);
+    }
     
     void WebsocketSession::set_message_callback(MessageCallback callback) {
         on_message_ = std::move(callback);
@@ -62,9 +63,10 @@ namespace CAM::API {
         boost::system::error_code ep_errc;                    
         auto remote_endpoint = ws_.next_layer().socket().remote_endpoint(ep_errc);
         if (!ep_errc) {
-            spdlog::info("WebSocket client connected successfully from {}:{}", 
+            spdlog::info("WebSocket client connected successfully from {}:{} with session id {}", 
                          remote_endpoint.address().to_string(), 
-                         remote_endpoint.port());
+                         remote_endpoint.port(),
+                         session_id_);
         }
 
         boost::beast::flat_buffer buffer;
