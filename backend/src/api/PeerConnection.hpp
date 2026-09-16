@@ -12,7 +12,7 @@ namespace CAM::API {
     class PeerConnection : public std::enable_shared_from_this<PeerConnection> {
     public:
         using SignalingCallback = std::function<void(std::string)>;
-        using PeerCallback = std::function<void(std::shared_ptr<PeerConnection>)>;
+        using PeerCallback = std::function<void(const std::shared_ptr<PeerConnection>&)>;
 
         PeerConnection(PeerCallback on_join, PeerCallback on_leave);
         void set_signaling_callback(SignalingCallback callback);
@@ -22,8 +22,8 @@ namespace CAM::API {
         void send_message(const std::string& message);
 
         void handle_state(rtc::PeerConnection::State state);
-        void handle_description(rtc::Description description);
-        void handle_candidate(rtc::Candidate candidate);
+        void handle_description(const rtc::Description& description);
+        void handle_candidate(const rtc::Candidate& candidate);
 
     private:
         std::string session_id_;

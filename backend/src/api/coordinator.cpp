@@ -10,33 +10,33 @@ namespace CAM::API {
     : ws_manager_(std::move(ws_manager)), pc_manager_(std::move(pc_manager)) {}
 
     WebsocketSession::SessionCallback Coordinator::get_join_callback() {
-        return [weak_manager = std::weak_ptr<WebsocketManager>(ws_manager_)](std::shared_ptr<WebsocketSession> session) {
+        return [weak_manager = std::weak_ptr<WebsocketManager>(ws_manager_)](const std::shared_ptr<WebsocketSession>& session) {
             if (auto locked = weak_manager.lock()) {
-                locked->join(std::move(session));
+                locked->join(session);
             }
         };
     }
 
     WebsocketSession::SessionCallback Coordinator::get_leave_callback() {
-        return [weak_manager = std::weak_ptr<WebsocketManager>(ws_manager_)](std::shared_ptr<WebsocketSession> session) {
+        return [weak_manager = std::weak_ptr<WebsocketManager>(ws_manager_)](const std::shared_ptr<WebsocketSession>& session) {
             if (auto locked = weak_manager.lock()) {
-                locked->leave(std::move(session));
+                locked->leave(session);
             }
         };
     }
 
     PeerConnection::PeerCallback Coordinator::get_peer_join_callback() {
-        return [weak_manager = std::weak_ptr<PeerConnectionManager>(pc_manager_)](std::shared_ptr<PeerConnection> session) {
+        return [weak_manager = std::weak_ptr<PeerConnectionManager>(pc_manager_)](const std::shared_ptr<PeerConnection>& session) {
             if (auto locked = weak_manager.lock()) {
-                locked->join(std::move(session));
+                locked->join(session);
             }
         };
     }
 
     PeerConnection::PeerCallback Coordinator::get_peer_leave_callback() {
-        return [weak_manager = std::weak_ptr<PeerConnectionManager>(pc_manager_)](std::shared_ptr<PeerConnection> session) {
+        return [weak_manager = std::weak_ptr<PeerConnectionManager>(pc_manager_)](const std::shared_ptr<PeerConnection>& session) {
             if (auto locked = weak_manager.lock()) {
-                locked->leave(std::move(session));
+                locked->leave(session);
             }
         };
     }
@@ -59,7 +59,7 @@ namespace CAM::API {
                 }
             });
 
-            websocket_session->set_message_callback([peer = peer_connection](std::string msg) {
+            websocket_session->set_message_callback([peer = peer_connection](const std::string& msg) {
                 peer->handle_signaling_message(msg);
             });
 

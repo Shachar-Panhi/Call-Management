@@ -17,7 +17,7 @@ namespace CAM::API {
 
     class WebsocketSession : public std::enable_shared_from_this<WebsocketSession> {
     public: 
-        using SessionCallback = std::function<void(std::shared_ptr<WebsocketSession>)>;
+        using SessionCallback = std::function<void(const std::shared_ptr<WebsocketSession>&)>;
         using MessageCallback = std::function<void(std::string)>;
         
         explicit WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave);

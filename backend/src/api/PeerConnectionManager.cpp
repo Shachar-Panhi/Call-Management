@@ -7,12 +7,12 @@
 namespace CAM::API {
     PeerConnectionManager::PeerConnectionManager() = default;
 
-    void PeerConnectionManager::join(std::shared_ptr<PeerConnection> peer) {
+    void PeerConnectionManager::join(const std::shared_ptr<PeerConnection>& peer) {
         peers_.push_back(peer);
         spdlog::info("PeerConnection added to manager vector");
     }
 
-    void PeerConnectionManager::leave(std::shared_ptr<PeerConnection> peer) {
+    void PeerConnectionManager::leave(const std::shared_ptr<PeerConnection>& peer) {
         std::erase(peers_, peer);
         spdlog::info("PeerConnection removed from manager vector");
     }

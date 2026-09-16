@@ -34,15 +34,15 @@ namespace CAM::API {
             }
         });
 
-        rtc_connection_->onLocalDescription([weak_self = weak_from_this()](rtc::Description description) {
+        rtc_connection_->onLocalDescription([weak_self = weak_from_this()](const rtc::Description& description) {
             if (auto self = weak_self.lock()) {
-                self->handle_description(std::move(description));
+                self->handle_description(description);
             }
         });
 
-        rtc_connection_->onLocalCandidate([weak_self = weak_from_this()](rtc::Candidate candidate) {
+        rtc_connection_->onLocalCandidate([weak_self = weak_from_this()](const rtc::Candidate& candidate) {
             if (auto self = weak_self.lock()) {
-                self->handle_candidate(std::move(candidate));
+                self->handle_candidate(candidate);
             }
         });
 
@@ -61,7 +61,7 @@ namespace CAM::API {
         }
     }
 
-    void PeerConnection::handle_description(rtc::Description description) {
+    void PeerConnection::handle_description(const rtc::Description& description) {
         if (!send_signaling_) {
             return;
         }
@@ -81,7 +81,7 @@ namespace CAM::API {
         send_signaling_(std::move(json_message));
     }
 
-    void PeerConnection::handle_candidate(rtc::Candidate candidate) {
+    void PeerConnection::handle_candidate(const rtc::Candidate& candidate) {
         if (!send_signaling_) {
             return;
         }
