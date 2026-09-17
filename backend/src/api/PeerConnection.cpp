@@ -1,8 +1,8 @@
 #include "PeerConnection.hpp"
 #include "types.hpp"
+#include "../utils/JsonUtils.hpp"
 
 #include <spdlog/spdlog.h>
-#include <glaze/glaze.hpp>
 #include <utility>
 
 namespace CAM::API {
@@ -67,15 +67,13 @@ namespace CAM::API {
         packet.type = description.typeString();
         packet.sdp = std::string(description);
         
-        std::string json_message;
-        auto glz_errc = glz::write_json(packet, json_message);
-
-        if (glz_errc) {
+        auto json_message_result = CAM::Utils::serialize_json(packet);
+        if (!json_message_result) {
             spdlog::error("Failed to write the signaling packet to json");
             return;
         }
 
-        send_signaling_(std::move(json_message));
+        send_signaling_(std::move(json_message_result.value()));
     }
 
     void PeerConnection::handle_candidate(const rtc::Candidate& candidate) {
@@ -88,15 +86,14 @@ namespace CAM::API {
         packet.candidate = std::string(candidate);
         packet.sdpMid = candidate.mid();
         
-        std::string json_message;
-        auto glz_errc = glz::write_json(packet, json_message);
+        auto json_message_result = CAM::Utils::serialize_json(packet);
         
-        if (glz_errc) {
-            spdlog::error("Failed to write candidate to json");
+        if (!json_message_result) {
+            spdlog::error("failed to write candidate to json");
             return;
         }
         
-        send_signaling_(std::move(json_message));
+        send_signaling_(std::move(json_message_result.value()));
     }
 
     void PeerConnection::handle_signaling_message(const std::string& message) {
@@ -113,13 +110,13 @@ namespace CAM::API {
             return;
         }
 
-        SignalingPacket packet;
-        auto glz_errc = glz::read_json(packet, message);
-        
-        if (glz_errc) {
+        auto packet_result = CAM::Utils::parse_json<SignalingPacket>(message);
+        if (!packet_result) {
             spdlog::error("json parsing error");
             return;
         }
+
+        auto& packet = packet_result.value();
 
         if (packet.type == "answer" && packet.sdp.has_value()) {
             rtc_connection_->setRemoteDescription(rtc::Description(packet.sdp.value(), packet.type));
