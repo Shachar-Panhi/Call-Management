@@ -4,7 +4,6 @@
 #include <boost/beast.hpp>
 #include <boost/beast/websocket.hpp>
 #include <spdlog/spdlog.h>
-#include <boost/uuid.hpp>
 #include <memory>
 #include <string>
 #include <functional>
@@ -20,7 +19,7 @@ namespace CAM::API {
         using SessionCallback = std::function<void(const std::shared_ptr<WebsocketSession>&)>;
         using MessageCallback = std::function<void(std::string)>;
         
-        explicit WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave);
+        explicit WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave, std::string session_id);
         
         boost::asio::awaitable<void> start(HTTP::request<HTTP::string_body> req);
         void set_message_callback(MessageCallback callback);

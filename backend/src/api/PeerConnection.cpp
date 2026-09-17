@@ -6,11 +6,8 @@
 #include <utility>
 
 namespace CAM::API {
-    PeerConnection::PeerConnection(PeerCallback on_join, PeerCallback on_leave)
-    : on_join_(std::move(on_join)), on_leave_(std::move(on_leave)) {
-        boost::uuids::uuid uuid = boost::uuids::random_generator()();
-        session_id_ = boost::uuids::to_string(uuid);
-    }
+    PeerConnection::PeerConnection(PeerCallback on_join, PeerCallback on_leave, std::string session_id)
+    : on_join_(std::move(on_join)), on_leave_(std::move(on_leave)), session_id_(std::move(session_id)) {}
 
     void PeerConnection::send_message(const std::string& message) {
         if (data_channel_ && data_channel_->isOpen()) {

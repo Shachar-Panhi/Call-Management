@@ -4,9 +4,6 @@
 #include <functional>
 #include <memory>
 #include <rtc/rtc.hpp>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
 
 namespace CAM::API {
     class PeerConnection : public std::enable_shared_from_this<PeerConnection> {
@@ -14,7 +11,7 @@ namespace CAM::API {
         using SignalingCallback = std::function<void(std::string)>;
         using PeerCallback = std::function<void(const std::shared_ptr<PeerConnection>&)>;
 
-        PeerConnection(PeerCallback on_join, PeerCallback on_leave);
+        PeerConnection(PeerCallback on_join, PeerCallback on_leave, std::string session_id);
         void set_signaling_callback(SignalingCallback callback);
         void handle_signaling_message(const std::string& message);
         void initialize_webrtc();

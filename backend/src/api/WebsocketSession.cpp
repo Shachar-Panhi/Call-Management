@@ -2,11 +2,9 @@
 #include "WebsocketManager.hpp"
 
 namespace CAM::API { 
-    WebsocketSession::WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave)
-    : ws_(std::move(socket)), on_join_(std::move(on_join)), on_leave_(std::move(on_leave)) {
-        boost::uuids::uuid uuid = boost::uuids::random_generator()();
-        session_id_ = boost::uuids::to_string(uuid);
-    }
+    WebsocketSession::WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave, std::string session_id)
+    : ws_(std::move(socket)), on_join_(std::move(on_join)),
+    on_leave_(std::move(on_leave)), session_id_(std::move(session_id)) {}
     
     void WebsocketSession::set_message_callback(MessageCallback callback) {
         on_message_ = std::move(callback);
