@@ -1,6 +1,6 @@
 #include  "coordinator.hpp"
-#include "WebsocketSession.hpp"
-#include "PeerConnection.hpp"
+#include "../utils/Utils.hpp"
+
 
 #include <functional>
 #include <utility>
@@ -8,11 +8,6 @@
 namespace CAM::API {
     Coordinator::Coordinator(std::shared_ptr<WebsocketManager> ws_manager, std::shared_ptr<PeerConnectionManager> pc_manager) 
     : ws_manager_(std::move(ws_manager)), pc_manager_(std::move(pc_manager)) {}
-
-    std::string Coordinator::generate_session_id() {
-        boost::uuids::uuid uuid = boost::uuids::random_generator()();
-        return boost::uuids::to_string(uuid);
-    }
 
     WebsocketSession::SessionCallback Coordinator::get_join_callback() {
         return [weak_manager = std::weak_ptr<WebsocketManager>(ws_manager_)](const std::shared_ptr<WebsocketSession>& session) {
@@ -55,10 +50,10 @@ namespace CAM::API {
         return [on_join, on_leave, on_peer_join, on_peer_leave](TCP::socket socket, HTTP::request<HTTP::string_body> req) {
             auto executor = socket.get_executor();
             
-            auto ws_id = generate_session_id();
+            auto ws_id = CAM::Utils::generate_session_id();
             auto websocket_session = std::make_shared<WebsocketSession>(std::move(socket), on_join, on_leave, ws_id);
             
-            auto pc_id = generate_session_id();
+            auto pc_id = CAM::Utils::generate_session_id();
             auto peer_connection = std::make_shared<PeerConnection>(on_peer_join, on_peer_leave, pc_id);
 
             peer_connection->set_signaling_callback([weak_ws = std::weak_ptr<WebsocketSession>(websocket_session)](std::string msg) {

@@ -9,7 +9,6 @@
 #include <memory>
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
-#include <boost/uuid.hpp>
 
 namespace CAM::API {
     using TCP = boost::asio::ip::tcp;
@@ -26,10 +25,7 @@ namespace CAM::API {
         WebsocketSession::SessionCallback get_leave_callback();
 
         PeerConnection::PeerCallback get_peer_join_callback();
-        PeerConnection::PeerCallback get_peer_leave_callback();
-
-        static std::string generate_session_id();
-        
+        PeerConnection::PeerCallback get_peer_leave_callback();        
     private:
         std::shared_ptr<WebsocketManager> ws_manager_;    
         std::shared_ptr<PeerConnectionManager> pc_manager_;    
