@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 #include <functional>
-#include <queue>
+#include <deque>
 
 namespace CAM::API {
     using TCP = boost::asio::ip::tcp;
@@ -34,8 +34,8 @@ namespace CAM::API {
         SessionCallback on_join_;
         SessionCallback on_leave_;
         MessageCallback on_message_;
-        
-        std::queue<std::string> write_queue_;
+
+        std::deque<std::string> write_queue_;
         bool is_writing_ = false;
         std::string session_id_;
     };

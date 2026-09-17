@@ -20,7 +20,7 @@ namespace CAM::API {
     }
 
     void WebsocketSession::queue_message(std::string message) {
-        write_queue_.push(std::move(message));
+        write_queue_.push_back(std::move(message));
         
         if (!is_writing_) {
             is_writing_ = true;
@@ -42,7 +42,7 @@ namespace CAM::API {
                 break;
             }
             
-            write_queue_.pop();
+            write_queue_.pop_front();
         }
         
         is_writing_ = false;
