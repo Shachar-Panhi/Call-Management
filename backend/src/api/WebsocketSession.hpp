@@ -36,6 +36,8 @@ namespace CAM::API {
 
         std::deque<std::string> write_queue_;
         bool is_writing_ = false;
+        bool is_open_ = false;
+
         std::string session_id_;
     };
 }

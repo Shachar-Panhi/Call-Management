@@ -20,7 +20,7 @@ namespace CAM::API {
     void WebsocketSession::queue_message(std::string message) {
         write_queue_.push_back(std::move(message));
         
-        if (!is_writing_) {
+        if (is_open_ && !is_writing_) {
             is_writing_ = true;
             boost::asio::co_spawn(ws_.get_executor(), process_write_queue(), boost::asio::detached);
         }
@@ -54,6 +54,13 @@ namespace CAM::API {
         if (errc) {
             spdlog::error("Websocket accept error {}", errc.message());
             co_return;
+        }
+
+        is_open_ = true;
+
+        if (!write_queue_.empty() && !is_writing_) {
+            is_writing_ = true;
+            boost::asio::co_spawn(ws_.get_executor(), process_write_queue(), boost::asio::detached);
         }
 
         on_join_(self);

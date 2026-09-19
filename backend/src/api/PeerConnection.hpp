@@ -18,6 +18,8 @@ namespace CAM::API {
         
         void send_message(const std::string& message);
 
+        void create_data_channel();
+
         void handle_state(rtc::PeerConnection::State state);
         void handle_description(const rtc::Description& description);
         void handle_candidate(const rtc::Candidate& candidate);

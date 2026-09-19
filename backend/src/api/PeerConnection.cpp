@@ -23,8 +23,6 @@ namespace CAM::API {
         rtc::Configuration config;
         rtc_connection_ = std::make_shared<rtc::PeerConnection>(config);
 
-        spdlog::info("peerconnection created with session id: {}", session_id_);
-
         rtc_connection_->onStateChange([weak_self = weak_from_this()](rtc::PeerConnection::State state) {
             if (auto self = weak_self.lock()) {
                 self->handle_state(state);
@@ -46,6 +44,8 @@ namespace CAM::API {
         if (on_join_) {
             on_join_(shared_from_this());
         }
+
+        create_data_channel();
     }
 
     void PeerConnection::handle_state(rtc::PeerConnection::State state) {
@@ -96,19 +96,17 @@ namespace CAM::API {
         send_signaling_(std::move(json_message_result.value()));
     }
 
+    void PeerConnection::create_data_channel() {
+        data_channel_ = rtc_connection_->createDataChannel("chat");
+        data_channel_->onOpen([]() {
+            spdlog::info("datachannel opened successfully");
+        });
+        
+        rtc_connection_->setLocalDescription();
+    }
+
     void PeerConnection::handle_signaling_message(const std::string& message) {
         spdlog::info("peer connection received {}", message);
-        
-        if (message == "start") {
-            data_channel_ = rtc_connection_->createDataChannel("chat");
-            
-            data_channel_->onOpen([]() {
-                spdlog::info("datachannel opened successfully");
-            });
-            
-            rtc_connection_->setLocalDescription();
-            return;
-        }
 
         auto packet_result = CAM::Utils::parse_json<SignalingPacket>(message);
         if (!packet_result) {
