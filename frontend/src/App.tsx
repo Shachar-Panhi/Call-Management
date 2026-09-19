@@ -11,9 +11,13 @@ interface LogMessage {
 export default function App() {
   const [messages, setMessages] = useState<LogMessage[]>([]);
   const [input, setInput] = useState<string>('');
+  const [isDataChannelOpen, setIsDataChannelOpen] = useState<boolean>(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const dcRef = useRef<RTCDataChannel | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const messageIdRef = useRef<number>(0);
+  const isConnecting = useRef(false);
 
   const appendLog = (text: string, type: MessageType) => {
     setMessages((prev) => [
@@ -23,26 +27,82 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Prevent strict-mode double connections
+    if (wsRef.current || isConnecting.current) return;
+    
+    isConnecting.current = true;
     const ws = new WebSocket('ws://127.0.0.1:8080');
     wsRef.current = ws;
 
-    ws.onopen = () => {
-      appendLog('Connected to server.', 'system');
+    const pc = new RTCPeerConnection();
+    pcRef.current = pc;
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'candidate',
+          candidate: event.candidate.candidate,
+          sdpMid: event.candidate.sdpMid
+        }));
+      }
     };
 
-    ws.onmessage = (event) => {
-      appendLog(event.data, 'received');
+    pc.ondatachannel = (event) => {
+      const dc = event.channel;
+      dcRef.current = dc;
+
+      dc.onopen = () => {
+        setIsDataChannelOpen(true);
+        appendLog(`WebRTC DataChannel '${dc.label}' opened!`, 'system');
+      };
+
+      dc.onmessage = (e) => {
+        appendLog(e.data, 'received');
+      };
+
+      dc.onclose = () => {
+        setIsDataChannelOpen(false);
+        appendLog('WebRTC DataChannel closed.', 'system');
+        dcRef.current = null;
+      };
+    };
+
+    ws.onopen = () => {
+      appendLog('WebSocket connected. Waiting for server to initiate WebRTC handshake...', 'system');
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        const packet = JSON.parse(event.data);
+
+        if (packet.type === 'offer' && packet.sdp) {
+          appendLog('Received WebRTC offer, generating answer...', 'system');
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: packet.sdp }));
+          
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          
+          ws.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
+        } 
+        else if (packet.type === 'candidate' && packet.candidate && packet.sdpMid) {
+          await pc.addIceCandidate(new RTCIceCandidate({
+            candidate: packet.candidate,
+            sdpMid: packet.sdpMid
+          }));
+        }
+      } catch (err) {
+        appendLog(`Non-JSON WebSocket message: ${event.data}`, 'received');
+      }
     };
 
     ws.onclose = () => {
-      appendLog('Disconnected.', 'system');
-    };
-
-    ws.onerror = () => {
-      appendLog('Connection error.', 'system');
+      appendLog('WebSocket disconnected.', 'system');
+      wsRef.current = null;
+      isConnecting.current = false;
     };
 
     return () => {
+      pc.close();
       ws.close();
     };
   }, []);
@@ -54,9 +114,13 @@ export default function App() {
   }, [messages]);
 
   const sendMessage = () => {
-    if (input && wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(input);
-      appendLog(`Sent: ${input}`, 'sent');
+    if (input) {
+      if (isDataChannelOpen && dcRef.current && dcRef.current.readyState === 'open') {
+        dcRef.current.send(input);
+        appendLog(`Sent: ${input}`, 'sent');
+      } else {
+        appendLog('Cannot send message: WebRTC connection not established yet.', 'system');
+      }
       setInput('');
     }
   };
@@ -81,15 +145,17 @@ export default function App() {
   };
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: '20px' }}>
+    <div style={{ fontFamily: 'sans-serif', padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
+      <h2>Signaling & WebRTC Console</h2>
       <div
         style={{
           border: '1px solid #ccc',
-          height: '300px',
+          height: '400px',
           overflowY: 'scroll',
           padding: '10px',
           marginBottom: '10px',
-          textAlign: 'left'
+          textAlign: 'left',
+          backgroundColor: '#fafafa'
         }}
       >
         {messages.map((msg) => (
@@ -99,16 +165,25 @@ export default function App() {
         ))}
         <div ref={logEndRef} />
       </div>
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Type message..."
-        autoFocus
-        style={{ marginRight: '5px', padding: '5px' }}
-      />
-      <button onClick={sendMessage} style={{ padding: '5px 10px' }}>Send</button>
+      <div style={{ display: 'flex' }}>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={isDataChannelOpen ? "Type message to send over WebRTC..." : "Connecting..."}
+          disabled={!isDataChannelOpen}
+          autoFocus
+          style={{ flexGrow: 1, marginRight: '10px', padding: '10px' }}
+        />
+        <button 
+          onClick={sendMessage} 
+          disabled={!isDataChannelOpen}
+          style={{ padding: '10px 20px', cursor: isDataChannelOpen ? 'pointer' : 'not-allowed' }}
+        >
+          Send
+        </button>
+      </div>
     </div>
   );
 }
