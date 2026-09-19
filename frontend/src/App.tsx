@@ -34,9 +34,7 @@ export default function App() {
     const ws = new WebSocket('ws://127.0.0.1:8080');
     wsRef.current = ws;
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    });
+    const pc = new RTCPeerConnection();
     pcRef.current = pc;
 
     pc.onicecandidate = (event) => {
