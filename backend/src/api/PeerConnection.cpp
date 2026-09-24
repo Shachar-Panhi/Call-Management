@@ -50,7 +50,6 @@ namespace CAM::API {
 
     void PeerConnection::handle_state(rtc::PeerConnection::State state) {
         if (state == rtc::PeerConnection::State::Closed || 
-            state == rtc::PeerConnection::State::Disconnected || 
             state == rtc::PeerConnection::State::Failed) {
             if (on_leave_) {
                 on_leave_(shared_from_this());
@@ -122,5 +121,11 @@ namespace CAM::API {
         }
 
         spdlog::error("json parsing error: message did not match any known struct");
+    }
+
+    void PeerConnection::close() {
+        if (rtc_connection_) {
+            rtc_connection_->close();
+        }
     }
 }

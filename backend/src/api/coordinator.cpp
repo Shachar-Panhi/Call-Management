@@ -51,8 +51,16 @@ namespace CAM::API {
             auto executor = socket.get_executor();
             
             auto session_id = CAM::Utils::generate_session_id();
-            auto websocket_session = std::make_shared<WebsocketSession>(std::move(socket), on_join, on_leave, session_id);
             auto peer_connection = std::make_shared<PeerConnection>(on_peer_join, on_peer_leave, session_id);
+
+            auto linked_session_leave = [on_leave, weak_peer = std::weak_ptr<PeerConnection>(peer_connection)](const std::shared_ptr<WebsocketSession>& session) {
+                on_leave(session);
+                if (auto peer = weak_peer.lock()) {
+                    peer->close();
+                }
+            };
+            auto websocket_session = std::make_shared<WebsocketSession>(std::move(socket), on_join, linked_session_leave, session_id);
+
 
             peer_connection->set_signaling_callback([weak_ws = std::weak_ptr<WebsocketSession>(websocket_session)](std::string msg) {
                 if (auto websocket = weak_ws.lock()) {
