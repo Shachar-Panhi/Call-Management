@@ -1,12 +1,21 @@
 #pragma once
 
 #include <string>
+#include <optional>
 
 namespace CAM::API {
+    struct ConnectionPacket {
+        std::string session_id;
+    };
 
-        struct SignalingMessage {
-        std::string type;
+    struct SdpOfferPacket {
+        std::string session_id;
         std::string sdp;
     };
 
-} //namespace CAM::Signaling
+    struct IceOfferPacket {
+        std::string session_id;
+        std::string candidate;
+        std::optional<std::string> sdpMid;
+    };
+}
