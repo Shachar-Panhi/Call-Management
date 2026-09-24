@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { SignalMessageSchema, type LogMessage, type MessageType } from '../types';
+import { ConnectionPacketSchema, SdpPacketSchema, IcePacketSchema, type LogMessage, type MessageType } from '../types';
 
 export const useWebRTC = (url: string) => {
   const [messages, setMessages] = useState<LogMessage[]>([]);
@@ -10,6 +10,7 @@ export const useWebRTC = (url: string) => {
   const dcRef = useRef<RTCDataChannel | null>(null);
   const messageIdRef = useRef<number>(0);
   const isConnecting = useRef<boolean>(false);
+  const sessionIdRef = useRef<string>('');
 
   const appendLog = useCallback((text: string, type: MessageType) => {
     setMessages((prev) => [
@@ -41,7 +42,7 @@ export const useWebRTC = (url: string) => {
     pc.onicecandidate = (event) => {
       if (event.candidate && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
-          type: 'candidate',
+          session_id: sessionIdRef.current,
           candidate: event.candidate.candidate,
           sdpMid: event.candidate.sdpMid
         }));
@@ -75,29 +76,39 @@ export const useWebRTC = (url: string) => {
     ws.onmessage = async (event) => {
       try {
         const rawPacket = JSON.parse(event.data);
-        const parsed = SignalMessageSchema.safeParse(rawPacket);
 
-        if (!parsed.success) {
-          appendLog(`Ignored invalid signaling message: ${event.data}`, 'received');
-          return;
-        }
-
-        const packet = parsed.data;
-
-        if (packet.type === 'offer') {
-          appendLog('Received WebRTC offer, generating answer...', 'system');
-          await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: packet.sdp }));
-          
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          
-          ws.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
+        if (rawPacket.sdp) {
+          const parsed = SdpPacketSchema.safeParse(rawPacket);
+          if (parsed.success) {
+            appendLog('Received WebRTC offer, generating answer...', 'system');
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: parsed.data.sdp }));
+            
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            
+            ws.send(JSON.stringify({ 
+              session_id: sessionIdRef.current,
+              sdp: answer.sdp 
+            }));
+          }
         } 
-        else if (packet.type === 'candidate' && packet.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate({
-            candidate: packet.candidate,
-            sdpMid: packet.sdpMid ?? null
-          }));
+        else if (rawPacket.candidate) {
+          const parsed = IcePacketSchema.safeParse(rawPacket);
+          if (parsed.success) {
+            await pc.addIceCandidate(new RTCIceCandidate({
+              candidate: parsed.data.candidate,
+              sdpMid: parsed.data.sdpMid ?? null
+            }));
+          }
+        }
+        else if (rawPacket.session_id) {
+          const parsed = ConnectionPacketSchema.safeParse(rawPacket);
+          if (parsed.success) {
+            sessionIdRef.current = parsed.data.session_id;
+            appendLog(`Received session ID: ${parsed.data.session_id}`, 'system');
+          }
+        } else {
+          appendLog(`Ignored invalid signaling message: ${event.data}`, 'received');
         }
       } catch (err) {
         appendLog(`Non-JSON WebSocket message: ${event.data}`, 'received');
