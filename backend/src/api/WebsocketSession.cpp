@@ -1,5 +1,7 @@
 #include "WebsocketSession.hpp"
 #include "WebsocketManager.hpp"
+#include "types.hpp"
+#include "../utils/JsonUtils.hpp"
 
 namespace CAM::API { 
     WebsocketSession::WebsocketSession(TCP::socket socket, SessionCallback on_join, SessionCallback on_leave, std::string session_id)
@@ -57,6 +59,14 @@ namespace CAM::API {
         }
 
         is_open_ = true;
+
+        ConnectionPacket conn_packet;
+        conn_packet.session_id = session_id_;
+
+        auto json_str = CAM::Utils::serialize_json(conn_packet);
+        if (json_str) {
+            queue_message(json_str.value());
+        }
 
         if (!write_queue_.empty() && !is_writing_) {
             is_writing_ = true;

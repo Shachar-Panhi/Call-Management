@@ -4,11 +4,18 @@
 #include <optional>
 
 namespace CAM::API {
-    struct SignalingPacket {
-        std::string type;
-        std::optional<std::string> sdp;
-        std::optional<std::string> candidate;
-        std::optional<std::string> sdpMid;
+    struct ConnectionPacket {
+        std::string session_id;
     };
 
-} //namespace CAM::Signaling
+    struct SdpOfferPacket {
+        std::string session_id;
+        std::string sdp;
+    };
+
+    struct IceOfferPacket {
+        std::string session_id;
+        std::string candidate;
+        std::optional<std::string> sdpMid;
+    };
+}

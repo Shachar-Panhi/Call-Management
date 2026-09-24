@@ -63,17 +63,17 @@ namespace CAM::API {
             return;
         }
 
-        SignalingPacket packet;
-        packet.type = description.typeString();
+        SdpOfferPacket packet;
+        packet.session_id = session_id_;
         packet.sdp = std::string(description);
         
-        auto json_message_result = CAM::Utils::serialize_json(packet);
-        if (!json_message_result) {
+        auto json_result = CAM::Utils::serialize_json(packet);
+        if (!json_result) {
             spdlog::error("Failed to write the signaling packet to json");
             return;
         }
 
-        send_signaling_(std::move(json_message_result.value()));
+        send_signaling_(std::move(json_result.value()));
     }
 
     void PeerConnection::handle_candidate(const rtc::Candidate& candidate) {
@@ -81,19 +81,19 @@ namespace CAM::API {
             return;
         }
 
-        SignalingPacket packet;
-        packet.type = "candidate";
+        IceOfferPacket packet;
+        packet.session_id = session_id_;
         packet.candidate = std::string(candidate);
         packet.sdpMid = candidate.mid();
         
-        auto json_message_result = CAM::Utils::serialize_json(packet);
+        auto json_result = CAM::Utils::serialize_json(packet);
         
-        if (!json_message_result) {
+        if (!json_result) {
             spdlog::error("failed to write candidate to json");
             return;
         }
         
-        send_signaling_(std::move(json_message_result.value()));
+        send_signaling_(std::move(json_result.value()));
     }
 
     void PeerConnection::create_data_channel() {
@@ -108,18 +108,19 @@ namespace CAM::API {
     void PeerConnection::handle_signaling_message(const std::string& message) {
         spdlog::info("peer connection received {}", message);
 
-        auto packet_result = CAM::Utils::parse_json<SignalingPacket>(message);
-        if (!packet_result) {
-            spdlog::error("json parsing error");
+        auto sdp_result = CAM::Utils::parse_json<SdpOfferPacket>(message);
+        if (sdp_result) {
+            std::string sdp_type = "answer"; // will always be the answer since the offer is always sent by the client
+            rtc_connection_->setRemoteDescription(rtc::Description(sdp_result.value().sdp, sdp_type));
             return;
         }
 
-        auto& packet = packet_result.value();
-
-        if (packet.type == "answer" && packet.sdp.has_value()) {
-            rtc_connection_->setRemoteDescription(rtc::Description(packet.sdp.value(), packet.type));
-        } else if (packet.type == "candidate" && packet.candidate.has_value() && packet.sdpMid.has_value()) {
-            rtc_connection_->addRemoteCandidate(rtc::Candidate(packet.candidate.value(), packet.sdpMid.value()));
+        auto ice_result = CAM::Utils::parse_json<IceOfferPacket>(message);
+        if (ice_result) {
+            rtc_connection_->addRemoteCandidate(rtc::Candidate(ice_result.value().candidate, ice_result.value().sdpMid.value_or("")));
+            return;
         }
+
+        spdlog::error("json parsing error: message did not match any known struct");
     }
 }
