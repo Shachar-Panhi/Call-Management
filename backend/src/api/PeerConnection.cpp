@@ -88,6 +88,19 @@ namespace CAM::API {
     }
 
     void PeerConnection::handle_state(rtc::PeerConnection::State state) {
+        std::string state_str;
+        switch (state) {
+            case rtc::PeerConnection::State::New: state_str = "New"; break;
+            case rtc::PeerConnection::State::Connecting: state_str = "Connecting"; break;
+            case rtc::PeerConnection::State::Connected: state_str = "Connected"; break;
+            case rtc::PeerConnection::State::Disconnected: state_str = "Disconnected"; break;
+            case rtc::PeerConnection::State::Failed: state_str = "Failed"; break;
+            case rtc::PeerConnection::State::Closed: state_str = "Closed"; break;
+            default: state_str = "Unknown"; break;
+        }
+
+        spdlog::info("[{}] Current WebRTC State: {}", session_id_, state_str);
+
         if (state == rtc::PeerConnection::State::Closed || 
             state == rtc::PeerConnection::State::Failed) {
             if (on_leave_) {
@@ -138,10 +151,10 @@ namespace CAM::API {
 
 
     void PeerConnection::handle_signaling_message(const std::string& message) {
-        spdlog::info("peer connection received {}", message);
 
         auto sdp_result = CAM::Utils::parse_json<SdpOfferPacket>(message);
         if (sdp_result) {
+            spdlog::info("[{}] Received WebRTC SDP Answer", session_id_);
             std::string sdp_type = "answer"; // will always be the answer since the offer is always sent by the client
             rtc_connection_->setRemoteDescription(rtc::Description(sdp_result.value().sdp, sdp_type));
             return;
@@ -149,6 +162,7 @@ namespace CAM::API {
 
         auto ice_result = CAM::Utils::parse_json<IceOfferPacket>(message);
         if (ice_result) {
+            spdlog::info("[{}] Received ICE Candidate", session_id_);
             rtc_connection_->addRemoteCandidate(rtc::Candidate(ice_result.value().candidate, ice_result.value().sdpMid.value_or("")));
             return;
         }
