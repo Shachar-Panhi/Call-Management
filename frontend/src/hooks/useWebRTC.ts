@@ -23,7 +23,15 @@ export const useWebRTC = (url: string) => {
 
     try {
       appendLog('Requesting microphone access...', 'system');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
+        } 
+      })      
       streamRef.current = stream;
       appendLog('Microphone access granted.', 'system');
 
