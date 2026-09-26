@@ -1,19 +1,15 @@
 #include "PeerConnection.hpp"
 #include "types.hpp"
 #include "../utils/JsonUtils.hpp"
+#include "../ThirdParty/RtpCpp/RtpPacket.hpp"
 
 #include <spdlog/spdlog.h>
 #include <utility>
+#include <span>
 
 namespace CAM::API {
     PeerConnection::PeerConnection(PeerCallback on_join, PeerCallback on_leave, std::string session_id)
     : on_join_(std::move(on_join)), on_leave_(std::move(on_leave)), session_id_(std::move(session_id)) {}
-
-    void PeerConnection::send_message(const std::string& message) {
-        if (data_channel_ && data_channel_->isOpen()) {
-            data_channel_->send(message);
-        }
-    }
 
     void PeerConnection::set_signaling_callback(SignalingCallback callback) {
         send_signaling_ = std::move(callback);
@@ -41,11 +37,54 @@ namespace CAM::API {
             }
         });
 
+        rtc_connection_->onTrack([weak_self = weak_from_this()](const std::shared_ptr<rtc::Track>& track) {
+            spdlog::info("audio track received");
+            
+            track->onMessage([](rtc::message_variant message) {
+                auto* data = std::get_if<std::vector<std::byte>>(&message);
+                if (!data) {
+                    return;
+                }
+                
+                std::span<std::uint8_t> buffer(
+                    reinterpret_cast<std::uint8_t*>(data->data()), 
+                    data->size()
+                );
+                RtpCpp::RtpPacket<std::span<std::uint8_t>> rtp_packet(buffer);
+                
+                if (rtp_packet.parse() == decltype(rtp_packet.parse())::kSuccess) {
+                    auto header = rtp_packet.get_header();
+                    spdlog::info("RTP Packet - Seq: {}, TS: {}", header.sequence_number_, header.timestamp_);
+                }
+            });
+        });
+
         if (on_join_) {
             on_join_(shared_from_this());
         }
 
-        create_data_channel();
+        setup_media_tracks();
+    }
+
+    void PeerConnection::setup_media_tracks() {
+        rtc::Description::Audio media("audio", rtc::Description::Direction::SendRecv);
+        media.addOpusCodec(kOpusCodecNum);
+        
+        audio_track_ = rtc_connection_->addTrack(media);
+        rtc_connection_->setLocalDescription();
+    }
+
+    std::string PeerConnection::enforce_16khz(std::string sdp) {
+        size_t fmtp_pos = sdp.find("a=fmtp:");
+        if (fmtp_pos != std::string::npos) {
+            size_t end_of_line = sdp.find("\r\n", fmtp_pos);
+            
+            if (end_of_line != std::string::npos) {
+                sdp.insert(end_of_line, ";maxplaybackrate=16000;sprop-maxcapturerate=16000");
+            }
+        }
+        
+        return sdp;
     }
 
     void PeerConnection::handle_state(rtc::PeerConnection::State state) {
@@ -64,7 +103,9 @@ namespace CAM::API {
 
         SdpOfferPacket packet;
         packet.session_id = session_id_;
-        packet.sdp = std::string(description);
+        
+        std::string modified_sdp = enforce_16khz(std::string(description));
+        packet.sdp = modified_sdp;
         
         auto json_result = CAM::Utils::serialize_json(packet);
         if (!json_result) {
@@ -95,14 +136,6 @@ namespace CAM::API {
         send_signaling_(std::move(json_result.value()));
     }
 
-    void PeerConnection::create_data_channel() {
-        data_channel_ = rtc_connection_->createDataChannel("chat");
-        data_channel_->onOpen([]() {
-            spdlog::info("datachannel opened successfully");
-        });
-        
-        rtc_connection_->setLocalDescription();
-    }
 
     void PeerConnection::handle_signaling_message(const std::string& message) {
         spdlog::info("peer connection received {}", message);

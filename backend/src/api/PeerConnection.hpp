@@ -8,6 +8,8 @@
 namespace CAM::API {
     class PeerConnection : public std::enable_shared_from_this<PeerConnection> {
     public:
+        static constexpr int kOpusCodecNum = 111;
+
         using SignalingCallback = std::function<void(std::string)>;
         using PeerCallback = std::function<void(const std::shared_ptr<PeerConnection>&)>;
 
@@ -15,10 +17,10 @@ namespace CAM::API {
         void set_signaling_callback(SignalingCallback callback);
         void handle_signaling_message(const std::string& message);
         void initialize_webrtc();
-        
-        void send_message(const std::string& message);
 
-        void create_data_channel();
+        void setup_media_tracks();
+        static std::string enforce_16khz(std::string sdp);
+
         void close();
 
         void handle_state(rtc::PeerConnection::State state);
@@ -29,7 +31,8 @@ namespace CAM::API {
         std::string session_id_;
         
         std::shared_ptr<rtc::PeerConnection> rtc_connection_;
-        std::shared_ptr<rtc::DataChannel> data_channel_;
+        std::shared_ptr<rtc::Track> audio_track_;
+
         SignalingCallback send_signaling_;
         
         PeerCallback on_join_;
