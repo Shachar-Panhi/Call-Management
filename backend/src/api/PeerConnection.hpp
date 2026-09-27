@@ -8,7 +8,7 @@
 namespace CAM::API {
     class PeerConnection : public std::enable_shared_from_this<PeerConnection> {
     public:
-        static constexpr int kOpusCodecNum = 111;
+        static constexpr int kOpusPayloadType = 111;
 
         using SignalingCallback = std::function<void(std::string)>;
         using PeerCallback = std::function<void(const std::shared_ptr<PeerConnection>&)>;
