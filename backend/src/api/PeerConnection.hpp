@@ -19,6 +19,7 @@ namespace CAM::API {
         void initialize_webrtc();
 
         void setup_media_tracks();
+        void process_packets();
         static std::string enforce_16khz(std::string sdp);
 
         void close();

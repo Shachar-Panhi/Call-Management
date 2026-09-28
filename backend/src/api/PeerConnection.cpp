@@ -37,33 +37,12 @@ namespace CAM::API {
             }
         });
 
-        rtc_connection_->onTrack([weak_self = weak_from_this()](const std::shared_ptr<rtc::Track>& track) {
-            spdlog::info("audio track received");
-            
-            track->onMessage([](rtc::message_variant message) {
-                auto* data = std::get_if<std::vector<std::byte>>(&message);
-                if (!data) {
-                    return;
-                }
-                
-                std::span<std::uint8_t> buffer(
-                    reinterpret_cast<std::uint8_t*>(data->data()), 
-                    data->size()
-                );
-                RtpCpp::RtpPacket<std::span<std::uint8_t>> rtp_packet(buffer);
-                
-                if (rtp_packet.parse() == decltype(rtp_packet.parse())::kSuccess) {
-                    auto header = rtp_packet.get_header();
-                    spdlog::info("RTP Packet - Seq: {}, TS: {}", header.sequence_number_, header.timestamp_);
-                }
-            });
-        });
-
         if (on_join_) {
             on_join_(shared_from_this());
         }
 
         setup_media_tracks();
+        process_packets();
     }
 
     void PeerConnection::setup_media_tracks() {
@@ -71,7 +50,28 @@ namespace CAM::API {
         media.addOpusCodec(kOpusPayloadType);
         
         audio_track_ = rtc_connection_->addTrack(media);
+
         rtc_connection_->setLocalDescription();
+    }
+
+    void PeerConnection::process_packets() {
+        audio_track_->onMessage([](rtc::message_variant message) {
+            auto* data = std::get_if<std::vector<std::byte>>(&message);
+            if (!data) {
+                return;
+            }
+            
+            std::span<std::uint8_t> buffer(
+                reinterpret_cast<std::uint8_t*>(data->data()), 
+                data->size()
+            );
+            RtpCpp::RtpPacket<std::span<std::uint8_t>> rtp_packet(buffer);
+            
+            if (rtp_packet.parse() == decltype(rtp_packet.parse())::kSuccess) {
+                auto header = rtp_packet.get_header();
+                spdlog::info("RTP Packet - Seq: {}, TS: {}", header.sequence_number_, header.timestamp_);
+            }
+        });
     }
 
     std::string PeerConnection::enforce_16khz(std::string sdp) {
