@@ -154,14 +154,26 @@ namespace CAM::API {
         send_signaling_(std::move(json_result.value()));
     }
 
+    std::expected<void, std::string> PeerConnection::set_remote_description(const std::string& sdp) {
+        try {
+            std::string sdp_type = "answer"; // the client is the one sending the offer so the server will send the answer
+            rtc_connection_->setRemoteDescription(rtc::Description(sdp, sdp_type));
+            return {};
+        } catch (std::exception& error) {
+            return std::unexpected(error.what());
+        }
+    }
 
     void PeerConnection::handle_signaling_message(const std::string& message) {
 
         auto sdp_result = CAM::Utils::parse_json<SdpOfferPacket>(message);
         if (sdp_result) {
             spdlog::info("[{}] Received WebRTC SDP Answer", session_id_);
-            std::string sdp_type = "answer"; // will always be the answer since the offer is always sent by the client
-            rtc_connection_->setRemoteDescription(rtc::Description(sdp_result.value().sdp, sdp_type));
+            
+            auto result = set_remote_description(sdp_result.value().sdp);
+            if (!result.has_value()) {
+                spdlog::error("[{}] Failed to apply remote description: {}", session_id_, result.error());
+            }
             return;
         }
 

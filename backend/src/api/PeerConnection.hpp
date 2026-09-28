@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <rtc/rtc.hpp>
+#include <expected>
 
 namespace CAM::API {
     class PeerConnection : public std::enable_shared_from_this<PeerConnection> {
@@ -15,8 +16,10 @@ namespace CAM::API {
 
         PeerConnection(PeerCallback on_join, PeerCallback on_leave, std::string session_id);
         void set_signaling_callback(SignalingCallback callback);
-        void handle_signaling_message(const std::string& message);
         void initialize_webrtc();
+
+        std::expected<void, std::string> set_remote_description(const std::string& sdp);
+        void handle_signaling_message(const std::string& message);
 
         void setup_media_tracks();
         void process_packets();
