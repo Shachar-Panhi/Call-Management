@@ -65,9 +65,10 @@ namespace CAM::API {
                 reinterpret_cast<std::uint8_t*>(data->data()), 
                 data->size()
             );
-            RtpCpp::RtpPacket<std::span<std::uint8_t>> rtp_packet(buffer);
+
+            RtpCpp::RtpPacketView rtp_packet(buffer);
             
-            if (rtp_packet.parse() == decltype(rtp_packet.parse())::kSuccess) {
+            if (rtp_packet.parse() == RtpCpp::Result::kSuccess) {
                 auto header = rtp_packet.get_header();
                 spdlog::info("RTP Packet - Seq: {}, TS: {}", header.sequence_number_, header.timestamp_);
             }
