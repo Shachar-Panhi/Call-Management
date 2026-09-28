@@ -6,6 +6,21 @@
 #include <spdlog/spdlog.h>
 #include <utility>
 #include <span>
+#include <string_view>
+
+namespace {
+    std::string_view state_to_string(rtc::PeerConnection::State state) {
+        switch (state) {
+            case rtc::PeerConnection::State::New: return "New";
+            case rtc::PeerConnection::State::Connecting: return "Connecting";
+            case rtc::PeerConnection::State::Connected: return "Connected";
+            case rtc::PeerConnection::State::Disconnected: return "Disconnected";
+            case rtc::PeerConnection::State::Failed: return "Failed";
+            case rtc::PeerConnection::State::Closed: return "Closed";
+            default: return "Unknown";
+        }
+    }
+}
 
 namespace CAM::API {
     PeerConnection::PeerConnection(PeerCallback on_join, PeerCallback on_leave, std::string session_id)
@@ -89,18 +104,7 @@ namespace CAM::API {
     }
 
     void PeerConnection::handle_state(rtc::PeerConnection::State state) {
-        std::string state_str;
-        switch (state) {
-            case rtc::PeerConnection::State::New: state_str = "New"; break;
-            case rtc::PeerConnection::State::Connecting: state_str = "Connecting"; break;
-            case rtc::PeerConnection::State::Connected: state_str = "Connected"; break;
-            case rtc::PeerConnection::State::Disconnected: state_str = "Disconnected"; break;
-            case rtc::PeerConnection::State::Failed: state_str = "Failed"; break;
-            case rtc::PeerConnection::State::Closed: state_str = "Closed"; break;
-            default: state_str = "Unknown"; break;
-        }
-
-        spdlog::info("[{}] Current WebRTC State: {}", session_id_, state_str);
+        spdlog::info("[{}] Current WebRTC State: {}", session_id_, state_to_string(state));
 
         if (state == rtc::PeerConnection::State::Closed || 
             state == rtc::PeerConnection::State::Failed) {
