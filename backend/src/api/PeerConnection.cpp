@@ -164,6 +164,15 @@ namespace CAM::API {
         }
     }
 
+    std::expected<void, std::string> PeerConnection::set_remote_candidate(const std::string& candidate, const std::string& mid) {
+        try {
+            rtc_connection_->addRemoteCandidate(rtc::Candidate(candidate, mid));
+            return {};
+        } catch (std::exception& error) {
+            return std::unexpected(error.what());
+        }
+    }
+
     void PeerConnection::handle_signaling_message(const std::string& message) {
 
         auto sdp_result = CAM::Utils::parse_json<SdpOfferPacket>(message);
@@ -180,7 +189,11 @@ namespace CAM::API {
         auto ice_result = CAM::Utils::parse_json<IceOfferPacket>(message);
         if (ice_result) {
             spdlog::info("[{}] Received ICE Candidate", session_id_);
-            rtc_connection_->addRemoteCandidate(rtc::Candidate(ice_result.value().candidate, ice_result.value().sdpMid.value_or("")));
+
+            auto result = set_remote_candidate(ice_result.value().candidate, ice_result.value().sdpMid.value_or(""));
+            if (!result.has_value()) {
+                spdlog::error("[{}] Failed to apply ICE candidate: {}", session_id_, result.error());
+            }
             return;
         }
 

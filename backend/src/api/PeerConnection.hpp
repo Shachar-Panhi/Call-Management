@@ -19,6 +19,7 @@ namespace CAM::API {
         void initialize_webrtc();
 
         std::expected<void, std::string> set_remote_description(const std::string& sdp);
+        std::expected<void, std::string> set_remote_candidate(const std::string& candidate, const std::string& mid);
         void handle_signaling_message(const std::string& message);
 
         void setup_media_tracks();
