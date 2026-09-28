@@ -31,7 +31,7 @@ export const useWebRTC = (url: string) => {
           echoCancellation: true,
           noiseSuppression: true
         } 
-      })      
+      });      
       streamRef.current = stream;
       appendLog('Microphone access granted.', 'system');
 
@@ -65,48 +65,48 @@ export const useWebRTC = (url: string) => {
       };
 
       ws.onmessage = async (event) => {
-          try {
-            const rawPacket = JSON.parse(event.data);
+        try {
+          const rawPacket = JSON.parse(event.data);
 
-            if (rawPacket.sdp) {
-              const parsed = SdpPacketSchema.safeParse(rawPacket);
-              if (parsed.success) {
-                appendLog('Received WebRTC offer, generating answer...', 'system');
-                
-                await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: parsed.data.sdp }));
-                
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                
-                ws.send(JSON.stringify({ 
-                  session_id: sessionIdRef.current,
-                  sdp: answer.sdp 
-                }));
-              }
-            } 
-            else if (rawPacket.candidate) {
-              const parsed = IcePacketSchema.safeParse(rawPacket);
-              if (parsed.success) {
-                await pc.addIceCandidate(new RTCIceCandidate({
-                  candidate: parsed.data.candidate,
-                  sdpMid: parsed.data.sdpMid ?? null
-                }));
-              }
-            }
-            else if (rawPacket.session_id) {
-              const parsed = ConnectionPacketSchema.safeParse(rawPacket);
-              if (parsed.success) {
-                sessionIdRef.current = parsed.data.session_id;
-                appendLog(`Received session ID: ${parsed.data.session_id}`, 'system');
-              }
-            } else {
-              appendLog(`Ignored invalid signaling message: ${event.data}`, 'received');
-            }
-          } catch (err) {
-            appendLog(`Error processing message: ${err}`, 'system');
-            console.error("WebSocket message error:", err);
+          const sdpParsed = SdpPacketSchema.safeParse(rawPacket);
+          if (sdpParsed.success) {
+            appendLog('Received WebRTC offer, generating answer...', 'system');
+            
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sdpParsed.data.sdp }));
+            
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            
+            ws.send(JSON.stringify({ 
+              session_id: sessionIdRef.current,
+              sdp: answer.sdp 
+            }));
+            return;
           }
-        };
+          
+          const iceParsed = IcePacketSchema.safeParse(rawPacket);
+          if (iceParsed.success) {
+            await pc.addIceCandidate(new RTCIceCandidate({
+              candidate: iceParsed.data.candidate,
+              sdpMid: iceParsed.data.sdpMid ?? null
+            }));
+            return;
+          }
+          
+          const connParsed = ConnectionPacketSchema.safeParse(rawPacket);
+          if (connParsed.success) {
+            sessionIdRef.current = connParsed.data.session_id;
+            appendLog(`Received session ID: ${connParsed.data.session_id}`, 'system');
+            return;
+          }
+
+          appendLog(`Ignored invalid signaling message: ${event.data}`, 'received');
+
+        } catch (err) {
+          appendLog(`Error processing message: ${err}`, 'system');
+          console.error("WebSocket message error:", err);
+        }
+      };
 
       ws.onclose = () => {
         setIsConnected(false);
