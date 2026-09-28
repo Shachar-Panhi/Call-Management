@@ -56,7 +56,7 @@ namespace CAM::API {
 
     void PeerConnection::process_packets() {
         audio_track_->onMessage([](rtc::message_variant message) {
-            auto* data = std::get_if<std::vector<std::byte>>(&message);
+            auto* data = std::get_if<rtc::binary>(&message);
             if (!data) {
                 return;
             }
