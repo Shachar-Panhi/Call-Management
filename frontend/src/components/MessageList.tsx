@@ -1,50 +1,33 @@
-import React, { useEffect, useRef } from 'react';
-import type { LogMessage, MessageType } from '../types';
+import React, { useRef, useEffect } from 'react';
+import type { LogMessage } from '../types';
 
 interface MessageListProps {
   messages: LogMessage[];
 }
 
 export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const getMessageStyle = (type: MessageType): React.CSSProperties => {
-    switch (type) {
-      case 'sent':
-        return { color: 'blue', margin: '5px 0' };
-      case 'received':
-        return { color: 'green', margin: '5px 0' };
-      case 'system':
-        return { color: 'gray', fontStyle: 'italic', margin: '5px 0' };
-      default:
-        return {};
-    }
-  };
-
   return (
-    <div
-      style={{
-        border: '1px solid #ccc',
-        height: '400px',
-        overflowY: 'scroll',
-        padding: '10px',
-        marginBottom: '10px',
-        textAlign: 'left',
-        backgroundColor: '#fafafa'
-      }}
-    >
+    <div className="h-96 overflow-y-auto bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-inner font-mono text-sm flex flex-col space-y-1.5">
       {messages.map((msg) => (
-        <div key={msg.id} style={getMessageStyle(msg.type)}>
+        <div 
+          key={msg.id} 
+          className={`break-words leading-relaxed ${
+            msg.type === 'system' ? 'text-blue-400' :
+            msg.type === 'received' ? 'text-gray-300' :
+            'text-emerald-400'
+          }`}
+        >
+          <span className="text-gray-600 mr-3 opacity-75">{'>'}</span>
           {msg.text}
         </div>
       ))}
-      <div ref={logEndRef} />
+      <div ref={endRef} />
     </div>
   );
 };

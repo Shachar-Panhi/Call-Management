@@ -4,21 +4,28 @@
 #include <functional>
 #include <memory>
 #include <rtc/rtc.hpp>
+#include <expected>
 
 namespace CAM::API {
     class PeerConnection : public std::enable_shared_from_this<PeerConnection> {
     public:
+        static constexpr int kOpusPayloadType = 111;
+
         using SignalingCallback = std::function<void(std::string)>;
         using PeerCallback = std::function<void(const std::shared_ptr<PeerConnection>&)>;
 
         PeerConnection(PeerCallback on_join, PeerCallback on_leave, std::string session_id);
         void set_signaling_callback(SignalingCallback callback);
-        void handle_signaling_message(const std::string& message);
         void initialize_webrtc();
-        
-        void send_message(const std::string& message);
 
-        void create_data_channel();
+        std::expected<void, std::string> set_remote_description(const std::string& sdp);
+        std::expected<void, std::string> set_remote_candidate(const std::string& candidate, const std::string& mid);
+        void handle_signaling_message(const std::string& message);
+
+        void setup_media_tracks();
+        void process_packets();
+        static std::string enforce_16khz(std::string sdp);
+
         void close();
 
         void handle_state(rtc::PeerConnection::State state);
@@ -29,7 +36,8 @@ namespace CAM::API {
         std::string session_id_;
         
         std::shared_ptr<rtc::PeerConnection> rtc_connection_;
-        std::shared_ptr<rtc::DataChannel> data_channel_;
+        std::shared_ptr<rtc::Track> audio_track_;
+
         SignalingCallback send_signaling_;
         
         PeerCallback on_join_;
