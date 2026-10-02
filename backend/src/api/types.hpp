@@ -18,4 +18,14 @@ namespace CAM::API {
         std::string candidate;
         std::optional<std::string> sdpMid;
     };
+
+    struct ApiRequestPacket {
+        std::optional<std::string> action;
+    };
+
+    struct ApiResponsePacket {
+        std::string type = "api_response";
+        std::string action;
+        std::string status;
+    };
 }

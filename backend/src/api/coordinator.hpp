@@ -4,11 +4,15 @@
 #include "WebsocketManager.hpp"
 #include "PeerConnectionManager.hpp"
 #include "PeerConnection.hpp"
+#include "types.hpp"
 
 #include <functional>
 #include <memory>
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
+#include <queue>
+#include <string>
+#include <unordered_map>
 
 namespace CAM::API {
     using TCP = boost::asio::ip::tcp;
@@ -25,9 +29,17 @@ namespace CAM::API {
         WebsocketSession::SessionCallback get_leave_callback();
 
         PeerConnection::PeerCallback get_peer_join_callback();
-        PeerConnection::PeerCallback get_peer_leave_callback();        
+        PeerConnection::PeerCallback get_peer_leave_callback();  
+        
+        void handle_api_request(const ApiRequestPacket& req, const std::string& session_id);
+        void match_peers();
+
     private:
         std::shared_ptr<WebsocketManager> ws_manager_;    
         std::shared_ptr<PeerConnectionManager> pc_manager_;    
+
+        std::queue<std::string> matching_queue_;
+        std::unordered_map<std::string, std::shared_ptr<WebsocketSession>> active_ws_sessions_;
+        std::unordered_map<std::string, std::shared_ptr<PeerConnection>> active_peer_connections_;
     };
 }
