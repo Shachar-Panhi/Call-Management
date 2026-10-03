@@ -15,6 +15,16 @@ export const IcePacketSchema = z.object({
   sdpMid: z.string().nullable().optional(),
 });
 
+export const ApiRequestPacketSchema = z.object({
+  action: z.string(),
+});
+
+export const ApiResponsePacketSchema = z.object({
+  type: z.string(),
+  action: z.string(),
+  status: z.string(),
+});
+
 export type MessageType = 'sent' | 'received' | 'system';
 
 export interface LogMessage {

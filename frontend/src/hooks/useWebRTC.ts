@@ -1,5 +1,12 @@
 import { useState, useRef, useCallback } from 'react';
-import { ConnectionPacketSchema, SdpPacketSchema, IcePacketSchema, type LogMessage, type MessageType } from '../types';
+import { 
+  ConnectionPacketSchema, 
+  SdpPacketSchema, 
+  IcePacketSchema, 
+  ApiResponsePacketSchema,
+  type LogMessage, 
+  type MessageType 
+} from '../types';
 
 export const useWebRTC = (url: string) => {
   const [messages, setMessages] = useState<LogMessage[]>([]);
@@ -56,17 +63,35 @@ export const useWebRTC = (url: string) => {
       };
 
       pc.ontrack = () => {
-        appendLog('Received remote media track from server.', 'system');
+        appendLog('Received remote media track from partner.', 'system');
       };
 
       ws.onopen = () => {
         setIsConnected(true);
-        appendLog('WebSocket connected. Waiting for server to initiate WebRTC handshake...', 'system');
+        appendLog('WebSocket connected. Joining matching queue...', 'system');
+        ws.send(JSON.stringify({ action: 'join_queue' }));
       };
 
       ws.onmessage = async (event) => {
         try {
           const rawPacket = JSON.parse(event.data);
+
+          const apiParsed = ApiResponsePacketSchema.safeParse(rawPacket);
+          if (apiParsed.success && apiParsed.data.type === 'api_response') {
+            const { action, status } = apiParsed.data;
+            
+            if (action === 'join_queue' && status === 'queued') {
+              appendLog(`Queued on server. Waiting for match...`, 'system');
+            } else if (action === 'match' && status === 'matched') {
+              appendLog(`Partner matched! Waiting for WebRTC initialization...`, 'system');
+            } else if (action === 'disconnect' && status === 'disconnected') {
+              appendLog(`Call disconnected by server.`, 'system');
+              if (pcRef.current) {
+                pcRef.current.close();
+              }
+            }
+            return;
+          }
 
           const sdpParsed = SdpPacketSchema.safeParse(rawPacket);
           if (sdpParsed.success) {
@@ -100,11 +125,10 @@ export const useWebRTC = (url: string) => {
             return;
           }
 
-          appendLog(`Ignored invalid signaling message: ${event.data}`, 'received');
+          appendLog(`Ignored unhandled message: ${event.data}`, 'received');
 
         } catch (err) {
           appendLog(`Error processing message: ${err}`, 'system');
-          console.error("WebSocket message error:", err);
         }
       };
 
@@ -120,20 +144,22 @@ export const useWebRTC = (url: string) => {
   };
 
   const stopCall = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ action: 'disconnect' }));
+    }
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
     }
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
+    
     setIsConnected(false);
-    appendLog('Call stopped.', 'system');
+    appendLog('Microphone access released and call stopped locally.', 'system');
   };
 
   return { messages, isConnected, startCall, stopCall };
