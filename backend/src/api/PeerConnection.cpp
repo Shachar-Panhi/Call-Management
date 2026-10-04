@@ -1,11 +1,9 @@
 #include "PeerConnection.hpp"
 #include "types.hpp"
 #include "../utils/JsonUtils.hpp"
-#include "../ThirdParty/RtpCpp/RtpPacket.hpp"
 
 #include <spdlog/spdlog.h>
 #include <utility>
-#include <span>
 #include <string_view>
 
 namespace {
@@ -28,6 +26,10 @@ namespace CAM::API {
 
     void PeerConnection::set_signaling_callback(SignalingCallback callback) {
         send_signaling_ = std::move(callback);
+    }
+
+    void PeerConnection::set_audio_callback(AudioPacketCallback callback) {
+        on_audio_packet_ = std::move(callback);
     }
 
     void PeerConnection::initialize_webrtc() {
@@ -69,23 +71,23 @@ namespace CAM::API {
         rtc_connection_->setLocalDescription();
     }
 
+    void PeerConnection::send_audio_packet(const rtc::binary& packet) {
+        if (audio_track_ && audio_track_->isOpen()) {
+            audio_track_->send(packet);
+        }
+    }
+
     void PeerConnection::process_packets() {
-        audio_track_->onMessage([](rtc::message_variant message) {
+        audio_track_->onMessage([weak_self = weak_from_this()](rtc::message_variant message) {
             auto* data = std::get_if<rtc::binary>(&message);
             if (!data) {
                 return;
             }
-            
-            std::span<std::uint8_t> buffer(
-                reinterpret_cast<std::uint8_t*>(data->data()), 
-                data->size()
-            );
 
-            RtpCpp::RtpPacketView rtp_packet(buffer);
-            
-            if (rtp_packet.parse() == RtpCpp::Result::kSuccess) {
-                auto header = rtp_packet.get_header();
-                spdlog::info("RTP Packet - Seq: {}, TS: {}", header.sequence_number_, header.timestamp_);
+            if (auto self = weak_self.lock()) {
+                if (self->on_audio_packet_) {
+                    self->on_audio_packet_(*data);
+                }
             }
         });
     }
