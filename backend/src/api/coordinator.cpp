@@ -53,11 +53,10 @@ namespace CAM::API {
             auto session_id = CAM::Utils::generate_session_id();
             auto peer_connection = std::make_shared<PeerConnection>(on_peer_join, on_peer_leave, session_id);
 
-            auto linked_session_leave = [this, on_leave, session_id, weak_peer = std::weak_ptr<PeerConnection>(peer_connection)](const std::shared_ptr<WebsocketSession>& session) {
+            auto linked_session_leave = [this, on_leave, session_id](const std::shared_ptr<WebsocketSession>& session) {
                 on_leave(session);
-                if (auto peer = weak_peer.lock()) {
-                    peer->close();
-                }
+                disconnect_session(session_id);
+
                 active_ws_sessions_.erase(session_id);
                 active_peer_connections_.erase(session_id);
             };
@@ -86,6 +85,33 @@ namespace CAM::API {
         };
     }
 
+    void Coordinator::disconnect_session(const std::string& session_id) {
+        if (active_peer_connections_.contains(session_id)) {
+            active_peer_connections_[session_id]->close();
+        }
+
+        if (partner_map_.contains(session_id)) {
+            std::string partner_id = partner_map_[session_id];
+            partner_map_.erase(session_id);
+            partner_map_.erase(partner_id);
+
+            if (active_peer_connections_.contains(partner_id)) {
+                active_peer_connections_[partner_id]->close();
+            }
+
+            if (active_ws_sessions_.contains(partner_id)) {
+                ApiResponsePacket partner_res;
+                partner_res.action = "disconnect";
+                partner_res.status = "partner_disconnected";
+
+                auto json_str = CAM::Utils::serialize_json(partner_res);
+                if (json_str) {
+                    active_ws_sessions_[partner_id]->dispatch_message(json_str.value());
+                }
+            }
+        }
+    }
+
     void Coordinator::handle_api_request(const ApiRequestPacket& req, const std::string& session_id) {
         if (req.action == "join_queue") {
             matching_queue_.push(session_id);
@@ -103,9 +129,7 @@ namespace CAM::API {
             
             match_peers();
         } else if (req.action == "disconnect") {
-            if (active_peer_connections_.contains(session_id)) {
-                active_peer_connections_[session_id]->close();
-            }
+            disconnect_session(session_id);
 
             ApiResponsePacket response;
             response.action = "disconnect";
@@ -144,6 +168,27 @@ namespace CAM::API {
                 matching_queue_.push(session_1);
                 break;
             }
+
+            partner_map_[session_1] = session_2;
+            partner_map_[session_2] = session_1;
+
+            active_peer_connections_[session_1]->set_audio_callback([this, session_1](const rtc::binary& packet) {
+                if (partner_map_.contains(session_1)) {
+                    std::string partner_id = partner_map_[session_1];
+                    if (active_peer_connections_.contains(partner_id)) {
+                        active_peer_connections_[partner_id]->send_audio_packet(packet);
+                    }
+                }
+            });
+
+            active_peer_connections_[session_2]->set_audio_callback([this, session_2](const rtc::binary& packet) {
+                if (partner_map_.contains(session_2)) {
+                    std::string partner_id = partner_map_[session_2];
+                    if (active_peer_connections_.contains(partner_id)) {
+                        active_peer_connections_[partner_id]->send_audio_packet(packet);
+                    }
+                }
+            });
 
             ApiResponsePacket match_res;
             match_res.action = "match";

@@ -33,6 +33,7 @@ namespace CAM::API {
         
         void handle_api_request(const ApiRequestPacket& req, const std::string& session_id);
         void match_peers();
+        void disconnect_session(const std::string& session_id);
 
     private:
         std::shared_ptr<WebsocketManager> ws_manager_;    
@@ -41,5 +42,6 @@ namespace CAM::API {
         std::queue<std::string> matching_queue_;
         std::unordered_map<std::string, std::shared_ptr<WebsocketSession>> active_ws_sessions_;
         std::unordered_map<std::string, std::shared_ptr<PeerConnection>> active_peer_connections_;
+        std::unordered_map<std::string, std::string> partner_map_;
     };
 }
