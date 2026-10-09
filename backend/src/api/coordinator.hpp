@@ -5,6 +5,7 @@
 #include "PeerConnectionManager.hpp"
 #include "PeerConnection.hpp"
 #include "types.hpp"
+#include "BridgeManager.hpp"
 
 #include <functional>
 #include <memory>
@@ -22,7 +23,7 @@ namespace CAM::API {
 
     class Coordinator {
     public:
-        explicit Coordinator(std::shared_ptr<WebsocketManager> ws_manager, std::shared_ptr<PeerConnectionManager> pc_manager);
+        explicit Coordinator(std::shared_ptr<WebsocketManager> ws_manager, std::shared_ptr<PeerConnectionManager> pc_manager, std::shared_ptr<BridgeManager> bridge_manager);
         Callback process_callback(); 
 
         WebsocketSession::SessionCallback get_join_callback();
@@ -38,10 +39,10 @@ namespace CAM::API {
     private:
         std::shared_ptr<WebsocketManager> ws_manager_;    
         std::shared_ptr<PeerConnectionManager> pc_manager_;    
+        std::shared_ptr<BridgeManager> bridge_manager_;
 
         std::queue<std::string> matching_queue_;
         std::unordered_map<std::string, std::shared_ptr<WebsocketSession>> active_ws_sessions_;
         std::unordered_map<std::string, std::shared_ptr<PeerConnection>> active_peer_connections_;
-        std::unordered_map<std::string, std::string> partner_map_;
     };
 }

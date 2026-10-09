@@ -6,8 +6,8 @@
 #include <utility>
 
 namespace CAM::API {
-    Coordinator::Coordinator(std::shared_ptr<WebsocketManager> ws_manager, std::shared_ptr<PeerConnectionManager> pc_manager) 
-    : ws_manager_(std::move(ws_manager)), pc_manager_(std::move(pc_manager)) {}
+    Coordinator::Coordinator(std::shared_ptr<WebsocketManager> ws_manager, std::shared_ptr<PeerConnectionManager> pc_manager, std::shared_ptr<BridgeManager> bridge_manager)
+    : ws_manager_(std::move(ws_manager)), pc_manager_(std::move(pc_manager)), bridge_manager_(std::move(bridge_manager)) {}
 
     WebsocketSession::SessionCallback Coordinator::get_join_callback() {
         return [weak_manager = std::weak_ptr<WebsocketManager>(ws_manager_)](const std::shared_ptr<WebsocketSession>& session) {
@@ -90,10 +90,9 @@ namespace CAM::API {
             active_peer_connections_[session_id]->close();
         }
 
-        if (partner_map_.contains(session_id)) {
-            std::string partner_id = partner_map_[session_id];
-            partner_map_.erase(session_id);
-            partner_map_.erase(partner_id);
+        if (bridge_manager_->contains(session_id)) {
+            std::string partner_id = bridge_manager_->get_partner(session_id);
+            bridge_manager_->remove_bridge(session_id);
 
             if (active_peer_connections_.contains(partner_id)) {
                 active_peer_connections_[partner_id]->close();
@@ -169,26 +168,13 @@ namespace CAM::API {
                 break;
             }
 
-            partner_map_[session_1] = session_2;
-            partner_map_[session_2] = session_1;
+            auto pc1 = active_peer_connections_[session_1];
+            auto pc2 = active_peer_connections_[session_2];
 
-            active_peer_connections_[session_1]->set_audio_callback([this, session_1](const rtc::binary& packet) {
-                if (partner_map_.contains(session_1)) {
-                    std::string partner_id = partner_map_[session_1];
-                    if (active_peer_connections_.contains(partner_id)) {
-                        active_peer_connections_[partner_id]->send_audio_packet(packet);
-                    }
-                }
-            });
+            std::shared_ptr<Bridge> bridge = std::make_shared<Bridge>(pc1, pc2, session_1, session_2);
+            bridge_manager_->add_bridge(bridge);
 
-            active_peer_connections_[session_2]->set_audio_callback([this, session_2](const rtc::binary& packet) {
-                if (partner_map_.contains(session_2)) {
-                    std::string partner_id = partner_map_[session_2];
-                    if (active_peer_connections_.contains(partner_id)) {
-                        active_peer_connections_[partner_id]->send_audio_packet(packet);
-                    }
-                }
-            });
+            bridge->setup_routing();
 
             ApiResponsePacket match_res;
             match_res.action = "match";
@@ -200,8 +186,9 @@ namespace CAM::API {
                 active_ws_sessions_[session_2]->dispatch_message(json_str.value());
             }
 
-            active_peer_connections_[session_1]->initialize_webrtc();
-            active_peer_connections_[session_2]->initialize_webrtc();
+            pc1->initialize_webrtc();
+            pc2->initialize_webrtc();
         }
     }
 }
+
