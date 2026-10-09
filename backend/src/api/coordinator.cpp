@@ -112,21 +112,49 @@ namespace CAM::API {
     }
 
     void Coordinator::handle_api_request(const ApiRequestPacket& req, const std::string& session_id) {
-        if (req.action == "join_queue") {
-            matching_queue_.push(session_id);
-            
-            ApiResponsePacket response;
-            response.action = "join_queue";
-            response.status = "queued";
-            
-            auto json_str = CAM::Utils::serialize_json(response);
-            if (json_str) {
-                if (active_ws_sessions_.contains(session_id)) {
+        if (req.action == "connect_to" && req.target_session_id) {
+            std::string target_id = req.target_session_id.value();
+
+            if (target_id == session_id) {
+                ApiResponsePacket err_res;
+                err_res.action = "connect_to";
+                err_res.status = "cannot_call_self";
+                auto json_str = CAM::Utils::serialize_json(err_res);
+                if (json_str && active_ws_sessions_.contains(session_id)) {
+                    active_ws_sessions_[session_id]->dispatch_message(json_str.value());
+                }
+                return;
+            }
+
+            if (active_ws_sessions_.contains(target_id) && !bridge_manager_->contains(target_id)) {
+                auto pc1 = active_peer_connections_[session_id];
+                auto pc2 = active_peer_connections_[target_id];
+
+                std::shared_ptr<Bridge> bridge = std::make_shared<Bridge>(pc1, pc2, session_id, target_id);
+                bridge_manager_->add_bridge(bridge);
+                bridge->setup_routing();
+
+                ApiResponsePacket match_res;
+                match_res.action = "match";
+                match_res.status = "matched";
+                
+                auto json_str = CAM::Utils::serialize_json(match_res);
+                if (json_str) {
+                    active_ws_sessions_[session_id]->dispatch_message(json_str.value());
+                    active_ws_sessions_[target_id]->dispatch_message(json_str.value());
+                }
+
+                pc1->initialize_webrtc();
+                pc2->initialize_webrtc();
+            } else {
+                ApiResponsePacket err_res;
+                err_res.action = "connect_to";
+                err_res.status = "failed";
+                auto json_str = CAM::Utils::serialize_json(err_res);
+                if (json_str && active_ws_sessions_.contains(session_id)) {
                     active_ws_sessions_[session_id]->dispatch_message(json_str.value());
                 }
             }
-            
-            match_peers();
         } else if (req.action == "disconnect") {
             disconnect_session(session_id);
 
@@ -142,53 +170,4 @@ namespace CAM::API {
             }
         }
     }
-
-    void Coordinator::match_peers() {
-        auto pop_valid_session = [this]() -> std::string {
-            while (!matching_queue_.empty()) {
-                std::string session_id = matching_queue_.front();
-                matching_queue_.pop();
-                
-                if (active_ws_sessions_.contains(session_id)) {
-                    return session_id;
-                }
-            }
-            return "";
-        };
-
-        while (matching_queue_.size() >= 2) {
-            std::string session_1 = pop_valid_session();
-            if (session_1.empty()) {
-                break;
-            }
-            
-            std::string session_2 = pop_valid_session();
-            if (session_2.empty()) {
-                matching_queue_.push(session_1);
-                break;
-            }
-
-            auto pc1 = active_peer_connections_[session_1];
-            auto pc2 = active_peer_connections_[session_2];
-
-            std::shared_ptr<Bridge> bridge = std::make_shared<Bridge>(pc1, pc2, session_1, session_2);
-            bridge_manager_->add_bridge(bridge);
-
-            bridge->setup_routing();
-
-            ApiResponsePacket match_res;
-            match_res.action = "match";
-            match_res.status = "matched";
-            
-            auto json_str = CAM::Utils::serialize_json(match_res);
-            if (json_str) {
-                active_ws_sessions_[session_1]->dispatch_message(json_str.value());
-                active_ws_sessions_[session_2]->dispatch_message(json_str.value());
-            }
-
-            pc1->initialize_webrtc();
-            pc2->initialize_webrtc();
-        }
-    }
 }
-

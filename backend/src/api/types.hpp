@@ -21,6 +21,7 @@ namespace CAM::API {
 
     struct ApiRequestPacket {
         std::optional<std::string> action;
+        std::optional<std::string> target_session_id;
     };
 
     struct ApiResponsePacket {
