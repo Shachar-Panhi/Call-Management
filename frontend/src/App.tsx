@@ -3,7 +3,7 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { MessageList } from './components/MessageList';
 
 export default function App() {
-  const { messages, isConnected, sessionId, isInCall, startCall, stopCall, connectToPeer } = useWebRTC('ws://127.0.0.1:8080');
+  const { messages, isConnected, sessionId, isInCall, connectToServer, stopCall, connectToPeer } = useWebRTC('ws://127.0.0.1:8080');
   const [targetId, setTargetId] = useState('');
   const [hasCopied, setHasCopied] = useState(false);
 
@@ -36,10 +36,10 @@ export default function App() {
       <div className="flex gap-3 mt-4">
         {!isConnected ? (
           <button 
-            onClick={startCall}
+            onClick={connectToServer}
             className="flex-1 px-5 py-3 bg-green-500 text-white font-medium rounded shadow hover:bg-green-600 transition-colors"
           >
-            Enable Microphone & Connect to Server
+            Connect to Server
           </button>
         ) : (
           <div className="flex flex-1 gap-2">
@@ -60,9 +60,10 @@ export default function App() {
             </button>
             <button 
               onClick={stopCall}
-              className="px-5 py-3 bg-red-500 text-white font-medium rounded shadow hover:bg-red-600 transition-colors"
+              disabled={!isInCall}
+              className="px-5 py-3 bg-red-500 text-white font-medium rounded shadow hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Disconnect
+              End Call
             </button>
           </div>
         )}
