@@ -5,14 +5,29 @@ import { MessageList } from './components/MessageList';
 export default function App() {
   const { messages, isConnected, sessionId, isInCall, startCall, stopCall, connectToPeer } = useWebRTC('ws://127.0.0.1:8080');
   const [targetId, setTargetId] = useState('');
+  const [hasCopied, setHasCopied] = useState(false);
+
+  const handleCopySessionId = () => {
+    navigator.clipboard.writeText(sessionId);
+    setHasCopied(true);
+    setTimeout(() => setHasCopied(false), 2000);
+  };
 
   return (
     <div className="max-w-2xl mx-auto p-5 font-sans">
       <h2 className="text-2xl font-bold text-gray-800 mb-4">PTT Audio Console</h2>
       
       {isConnected && sessionId && (
-        <div className="mb-4 p-3 bg-blue-100 text-blue-900 rounded font-mono text-sm">
-          Your Session ID: <strong>{sessionId}</strong>
+        <div className="mb-4 p-3 bg-blue-100 text-blue-900 rounded font-mono text-sm flex items-center justify-between">
+          <div>
+            Your Session ID: <strong>{sessionId}</strong>
+          </div>
+          <button 
+            onClick={handleCopySessionId}
+            className="px-3 py-1 bg-blue-200 hover:bg-blue-300 text-blue-800 font-semibold rounded transition-colors"
+          >
+            {hasCopied ? 'Copied' : 'Copy'}
+          </button>
         </div>
       )}
 
