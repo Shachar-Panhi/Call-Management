@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { 
   ConnectionPacketSchema, 
   SdpPacketSchema, 
@@ -21,6 +21,18 @@ export const useWebRTC = (url: string) => {
   const messageIdRef = useRef<number>(0);
   const sessionIdRef = useRef<string>('');
   const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    remoteAudioRef.current = new Audio();
+    remoteAudioRef.current.autoplay = true;
+    
+    return () => {
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
+      }
+    };
+  }, []);
 
   const appendLog = useCallback((text: string, type: MessageType) => {
     setMessages((prev) => [
@@ -156,8 +168,15 @@ export const useWebRTC = (url: string) => {
       }
     };
 
-    pc.ontrack = () => {
+    pc.ontrack = (event) => {
       appendLog('Received remote media track from partner.', 'system');
+      if (remoteAudioRef.current) {
+        if (event.streams && event.streams.length > 0) {
+          remoteAudioRef.current.srcObject = event.streams[0];
+        } else {
+          remoteAudioRef.current.srcObject = new MediaStream([event.track]);
+        }
+      }
     };
 
     appendLog('Requesting microphone access...', 'system');
@@ -182,6 +201,9 @@ export const useWebRTC = (url: string) => {
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
+    }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
     }
     micPromiseRef.current = null;
     iceCandidateQueueRef.current = [];
