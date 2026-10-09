@@ -13,6 +13,7 @@ namespace CAM::API {
 
         using SignalingCallback = std::function<void(std::string)>;
         using PeerCallback = std::function<void(const std::shared_ptr<PeerConnection>&)>;
+        using AudioPacketCallback = std::function<void(const rtc::binary&)>;
 
         PeerConnection(PeerCallback on_join, PeerCallback on_leave, std::string session_id);
         void set_signaling_callback(SignalingCallback callback);
@@ -21,6 +22,9 @@ namespace CAM::API {
         std::expected<void, std::string> set_remote_description(const std::string& sdp);
         std::expected<void, std::string> set_remote_candidate(const std::string& candidate, const std::string& mid);
         void handle_signaling_message(const std::string& message);
+
+        void set_audio_callback(AudioPacketCallback callback);
+        void send_audio_packet(const rtc::binary& packet);
 
         void setup_media_tracks();
         void process_packets();
@@ -39,6 +43,7 @@ namespace CAM::API {
         std::shared_ptr<rtc::Track> audio_track_;
 
         SignalingCallback send_signaling_;
+        AudioPacketCallback on_audio_packet_;
         
         PeerCallback on_join_;
         PeerCallback on_leave_;

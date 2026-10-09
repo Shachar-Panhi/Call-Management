@@ -9,8 +9,9 @@ int main() {
 
     std::shared_ptr<CAM::API::WebsocketManager> ws_manager = std::make_shared<CAM::API::WebsocketManager>();
     std::shared_ptr<CAM::API::PeerConnectionManager> pc_manager = std::make_shared<CAM::API::PeerConnectionManager>();
+    std::shared_ptr<CAM::API::BridgeManager> bridge_manager = std::make_shared<CAM::API::BridgeManager>();
 
-    CAM::API::Coordinator coordinator(ws_manager, pc_manager);
+    CAM::API::Coordinator coordinator(ws_manager, pc_manager, bridge_manager);
     auto callback = coordinator.process_callback();
 
     auto listener = std::make_shared<CAM::API::Listener>(io_context.get_executor(), std::move(callback));

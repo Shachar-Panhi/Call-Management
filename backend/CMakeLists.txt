@@ -39,7 +39,8 @@ FetchContent_MakeAvailable(boost libdatachannel spdlog glaze)
 find_package(OpenSSL REQUIRED)
 add_executable(backend "src/main.cpp" "src/api/Listener.cpp" "src/api/WebsocketSession.cpp"
 "src/api/HttpSession.cpp" "src/api/WebsocketManager.cpp" "src/api/coordinator.cpp"
-"src/api/PeerConnection.cpp" "src/api/PeerConnectionManager.cpp" "src/ThirdParty/RtpCpp/SmallVector.cpp")
+"src/api/PeerConnection.cpp" "src/api/PeerConnectionManager.cpp" "src/ThirdParty/RtpCpp/SmallVector.cpp"
+"src/api/Bridge.cpp" "src/api/BridgeManager.cpp")
 target_link_libraries(backend PRIVATE 
     Boost::asio
     Boost::beast
