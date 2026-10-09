@@ -4,8 +4,10 @@
 #include <utility>
 
 namespace CAM::API {
-    Bridge::Bridge(std::weak_ptr<PeerConnection> peer1, std::weak_ptr<PeerConnection> peer2, std::string session1_id, std::string session2_id)
-    : peer1_(std::move(peer1)), peer2_(std::move(peer2)), session1_id_(std::move(session1_id)), session2_id_(std::move(session2_id)) {}
+    Bridge::Bridge(std::weak_ptr<PeerConnection> peer1, std::weak_ptr<PeerConnection> peer2,
+        std::string session1_id, std::string session2_id)
+    : peer1_(std::move(peer1)), peer2_(std::move(peer2)),
+        session1_id_(std::move(session1_id)), session2_id_(std::move(session2_id)) {}
 
     bool Bridge::contains(const std::string& session_id) const {
         return session1_id_ == session_id || session2_id_ == session_id;
@@ -36,5 +38,13 @@ namespace CAM::API {
                 }
             });
         }
+    }
+
+    const std::string& Bridge::get_session1() const {
+        return session1_id_;
+    }
+
+    const std::string& Bridge::get_session2() const {
+        return session2_id_;
     }
 }
