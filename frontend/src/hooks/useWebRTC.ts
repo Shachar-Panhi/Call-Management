@@ -11,6 +11,8 @@ import {
 export const useWebRTC = (url: string) => {
   const [messages, setMessages] = useState<LogMessage[]>([]);
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [sessionId, setSessionId] = useState<string>('');
+  const [isInCall, setIsInCall] = useState<boolean>(false);
   
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -68,8 +70,7 @@ export const useWebRTC = (url: string) => {
 
       ws.onopen = () => {
         setIsConnected(true);
-        appendLog('WebSocket connected. Joining matching queue...', 'system');
-        ws.send(JSON.stringify({ action: 'join_queue' }));
+        appendLog('WebSocket connected. Waiting for connection target.', 'system');
       };
 
       ws.onmessage = async (event) => {
@@ -80,12 +81,18 @@ export const useWebRTC = (url: string) => {
           if (apiParsed.success && apiParsed.data.type === 'api_response') {
             const { action, status } = apiParsed.data;
             
-            if (action === 'join_queue' && status === 'queued') {
-              appendLog(`Queued on server. Waiting for match...`, 'system');
-            } else if (action === 'match' && status === 'matched') {
-              appendLog(`Partner matched! Waiting for WebRTC initialization...`, 'system');
-            } else if (action === 'disconnect' && status === 'disconnected') {
-              appendLog(`Call disconnected by server.`, 'system');
+            if (action === 'connect_to') {
+              if (status === 'failed') {
+                appendLog('Call failed. Partner not found or busy.', 'system');
+              } else if (status === 'cannot_call_self') {
+                appendLog('Call failed. You cannot call yourself.', 'system');
+              }
+            } else if (action === 'match') {
+              setIsInCall(true);
+              appendLog(`Partner matched! Status: ${status}. Waiting for WebRTC initialization...`, 'system');
+            } else if (action === 'disconnect') {
+              setIsInCall(false);
+              appendLog(`Call disconnected by server. Status: ${status}.`, 'system');
               if (pcRef.current) {
                 pcRef.current.close();
               }
@@ -121,6 +128,7 @@ export const useWebRTC = (url: string) => {
           const connParsed = ConnectionPacketSchema.safeParse(rawPacket);
           if (connParsed.success) {
             sessionIdRef.current = connParsed.data.session_id;
+            setSessionId(connParsed.data.session_id);
             appendLog(`Received session ID: ${connParsed.data.session_id}`, 'system');
             return;
           }
@@ -134,12 +142,24 @@ export const useWebRTC = (url: string) => {
 
       ws.onclose = () => {
         setIsConnected(false);
+        setIsInCall(false);
+        setSessionId('');
         appendLog('WebSocket disconnected.', 'system');
         wsRef.current = null;
       };
 
     } catch (err) {
       appendLog(`Failed to access microphone: ${err}`, 'system');
+    }
+  };
+
+  const connectToPeer = (targetId: string) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && !isInCall) {
+      wsRef.current.send(JSON.stringify({ 
+        action: 'connect_to',
+        target_session_id: targetId
+      }));
+      appendLog(`Dialing session ID: ${targetId}...`, 'sent');
     }
   };
 
@@ -159,8 +179,10 @@ export const useWebRTC = (url: string) => {
     }
     
     setIsConnected(false);
+    setIsInCall(false);
+    setSessionId('');
     appendLog('Microphone access released and call stopped locally.', 'system');
   };
 
-  return { messages, isConnected, startCall, stopCall };
+  return { messages, isConnected, sessionId, isInCall, startCall, stopCall, connectToPeer };
 };
