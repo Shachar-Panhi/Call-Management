@@ -3,7 +3,6 @@
 #include "WebsocketSession.hpp"
 #include "WebsocketManager.hpp"
 #include "PeerConnectionManager.hpp"
-#include "types.hpp"
 #include "BridgeManager.hpp"
 
 #include <functional>
@@ -16,14 +15,18 @@ namespace CAM::API {
     using TCP = boost::asio::ip::tcp;
     namespace HTTP = boost::beast::http;
     
-    using Callback = std::function<void(TCP::socket, HTTP::request<HTTP::string_body>)>;
-
+    using WsCallback = std::function<void(TCP::socket, HTTP::request<HTTP::string_body>)>;
+    using ApiCallback = std::function<HTTP::response<HTTP::string_body>(HTTP::request<HTTP::string_body>)>;
+    
     class Coordinator {
     public:
-        explicit Coordinator(std::shared_ptr<WebsocketManager> ws_manager, std::shared_ptr<PeerConnectionManager> pc_manager, std::shared_ptr<BridgeManager> bridge_manager);
-        Callback process_callback(); 
+        explicit Coordinator(std::shared_ptr<WebsocketManager> ws_manager, 
+            std::shared_ptr<PeerConnectionManager> pc_manager, 
+            std::shared_ptr<BridgeManager> bridge_manager);
         
-        void handle_api_request(const ApiRequestPacket& req, const std::string& session_id);
+        WsCallback process_ws_callback(); 
+        ApiCallback process_http_callback();  
+        
         void disconnect_session(const std::string& session_id);
 
     private:
