@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import axios from 'axios';
 import { 
   ConnectionPacketSchema, 
   SdpPacketSchema, 
@@ -8,7 +9,7 @@ import {
   type MessageType 
 } from '../types';
 
-export const useWebRTC = (url: string) => {
+export const useWebRTC = (wsUrl: string, apiUrl: string) => {
   const [messages, setMessages] = useState<LogMessage[]>([]);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string>('');
@@ -44,7 +45,7 @@ export const useWebRTC = (url: string) => {
   const connectToServer = () => {
     if (wsRef.current) return;
 
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -60,15 +61,7 @@ export const useWebRTC = (url: string) => {
         if (apiParsed.success && apiParsed.data.type === 'api_response') {
           const { action, status } = apiParsed.data;
           
-          if (action === 'connect_to') {
-            if (status === 'failed') {
-              appendLog('Call failed. Partner not found or busy.', 'system');
-              cleanupCall();
-            } else if (status === 'cannot_call_self') {
-              appendLog('Call failed. You cannot call yourself.', 'system');
-              cleanupCall();
-            }
-          } else if (action === 'match') {
+          if (action === 'match') {
             setIsInCall(true);
             initCall();
             appendLog(`Partner matched! Status: ${status}. Waiting for WebRTC initialization...`, 'system');
@@ -133,8 +126,6 @@ export const useWebRTC = (url: string) => {
           appendLog(`Received session ID: ${connParsed.data.session_id}`, 'system');
           return;
         }
-
-        appendLog(`Ignored unhandled message: ${event.data}`, 'received');
 
       } catch (err) {
         appendLog(`Error processing message: ${err}`, 'system');
@@ -211,18 +202,42 @@ export const useWebRTC = (url: string) => {
   }, []);
 
   const connectToPeer = async (targetId: string) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && !isInCall) {
-      wsRef.current.send(JSON.stringify({ 
-        action: 'connect_to',
-        target_session_id: targetId
-      }));
+    if (!isInCall && sessionIdRef.current) {
       appendLog(`Dialing session ID: ${targetId}...`, 'sent');
+      try {
+        const response = await axios.post(`${apiUrl}/api/call`, {
+          session_id: sessionIdRef.current,
+          target_session_id: targetId
+        });
+        
+        if (response.data.status !== 'success') {
+          appendLog(`Call failed: ${response.data.status || 'unknown error'}`, 'system');
+          cleanupCall();
+        }
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          appendLog(`Call request failed: ${err.response?.data?.status || err.message}`, 'system');
+        } else {
+          appendLog(`Call request failed: ${err}`, 'system');
+        }
+        cleanupCall();
+      }
     }
   };
 
-  const stopCall = () => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: 'disconnect' }));
+  const stopCall = async () => {
+    if (sessionIdRef.current) {
+      try {
+        await axios.post(`${apiUrl}/api/end_call`, { 
+          session_id: sessionIdRef.current 
+        });
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          appendLog(`Failed to send end call request: ${err.response?.data?.status || err.message}`, 'system');
+        } else {
+          appendLog(`Failed to send end call request: ${err}`, 'system');
+        }
+      }
     }
     cleanupCall();
     appendLog('Microphone access released and call ended.', 'system');

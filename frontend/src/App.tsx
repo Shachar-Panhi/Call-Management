@@ -3,7 +3,7 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { MessageList } from './components/MessageList';
 
 export default function App() {
-  const { messages, isConnected, sessionId, isInCall, connectToServer, stopCall, connectToPeer } = useWebRTC('ws://127.0.0.1:8080');
+  const { messages, isConnected, sessionId, isInCall, connectToServer, stopCall, connectToPeer } = useWebRTC('ws://127.0.0.1:8080', 'http://127.0.0.1:8080');
   const [targetId, setTargetId] = useState('');
   const [hasCopied, setHasCopied] = useState(false);
 
