@@ -52,8 +52,8 @@ namespace CAM::API {
     }
 
     ApiCallback Coordinator::process_http_callback() {
-        return [this](HTTP::request<HTTP::string_body> req) -> HTTP::response<HTTP::string_body> {
-            return router_.route(std::move(req));
+        return [this](const HTTP::request<HTTP::string_body>& req) -> HTTP::response<HTTP::string_body> {
+            return router_.route(req);
         };
     }
 
