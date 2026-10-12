@@ -4,6 +4,7 @@
 #include "WebsocketManager.hpp"
 #include "PeerConnectionManager.hpp"
 #include "BridgeManager.hpp"
+#include "HttpRouter.hpp"
 
 #include <functional>
 #include <memory>
@@ -33,5 +34,6 @@ namespace CAM::API {
         std::shared_ptr<WebsocketManager> ws_manager_;    
         std::shared_ptr<PeerConnectionManager> pc_manager_;    
         std::shared_ptr<BridgeManager> bridge_manager_;
+        HttpRouter router_;
     };
 }
