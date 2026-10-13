@@ -15,6 +15,7 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
   const [sessionId, setSessionId] = useState<string>('');
   const [isInCall, setIsInCall] = useState<boolean>(false);
   
+  const isMountedRef = useRef<boolean>(true);
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -24,26 +25,123 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
   const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  useEffect(() => {
-    remoteAudioRef.current = new Audio();
-    remoteAudioRef.current.autoplay = true;
-    
-    return () => {
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = null;
-      }
-    };
-  }, []);
-
   const appendLog = useCallback((text: string, type: MessageType) => {
+    if (!isMountedRef.current) return;
     setMessages((prev) => [
       ...prev,
       { id: messageIdRef.current++, text, type },
     ]);
   }, []);
 
-  const connectToServer = () => {
-    if (wsRef.current) return;
+  const cleanupCall = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+    }
+    micPromiseRef.current = null;
+    iceCandidateQueueRef.current = [];
+    if (isMountedRef.current) {
+      setIsInCall(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    remoteAudioRef.current = new Audio();
+    remoteAudioRef.current.autoplay = true;
+
+    return () => {
+      isMountedRef.current = false;
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
+        remoteAudioRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.onopen = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onerror = null;
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      cleanupCall();
+    };
+  }, [cleanupCall]);
+
+  const initCall = useCallback(async () => {
+    if (pcRef.current) {
+      if (micPromiseRef.current) {
+        await micPromiseRef.current;
+      }
+      return;
+    }
+
+    const pc = new RTCPeerConnection();
+    pcRef.current = pc;
+    iceCandidateQueueRef.current = [];
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          session_id: sessionIdRef.current,
+          candidate: event.candidate.candidate,
+          sdpMid: event.candidate.sdpMid
+        }));
+      }
+    };
+
+    pc.ontrack = (event) => {
+      appendLog('Received remote media track from partner.', 'system');
+      if (remoteAudioRef.current) {
+        if (event.streams && event.streams.length > 0) {
+          remoteAudioRef.current.srcObject = event.streams[0];
+        } else {
+          remoteAudioRef.current.srcObject = new MediaStream([event.track]);
+        }
+      }
+    };
+
+    appendLog('Requesting microphone access...', 'system');
+    const micPromise = navigator.mediaDevices.getUserMedia({ 
+      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true } 
+    }).then(stream => {
+      if (!pcRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      streamRef.current = stream;
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      appendLog('Microphone access granted.', 'system');
+    }).catch(err => {
+      appendLog(`Failed to access microphone: ${err}`, 'system');
+    });
+
+    micPromiseRef.current = micPromise;
+    await micPromise;
+  }, [appendLog]);
+
+  const connectToServer = useCallback(() => {
+    if (wsRef.current) {
+      if (
+        wsRef.current.readyState === WebSocket.CONNECTING ||
+        wsRef.current.readyState === WebSocket.OPEN
+      ) {
+        return;
+      }
+      wsRef.current.onopen = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -51,6 +149,10 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
     ws.onopen = () => {
       setIsConnected(true);
       appendLog('WebSocket connected. Waiting for connection target.', 'system');
+    };
+
+    ws.onerror = () => {
+      appendLog('WebSocket connection error.', 'system');
     };
 
     ws.onmessage = async (event) => {
@@ -63,8 +165,8 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
           
           if (action === 'match') {
             setIsInCall(true);
-            initCall();
             appendLog(`Partner matched! Status: ${status}. Waiting for WebRTC initialization...`, 'system');
+            await initCall();
           } else if (action === 'disconnect') {
             cleanupCall();
             appendLog(`Call disconnected by server. Status: ${status}.`, 'system');
@@ -76,15 +178,14 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
         if (sdpParsed.success) {
           appendLog('Received WebRTC offer, generating answer...', 'system');
           
-          if (!pcRef.current) {
-            initCall();
-          }
+          await initCall();
 
-          if (micPromiseRef.current) {
-            await micPromiseRef.current;
+          const pc = pcRef.current;
+          if (!pc) {
+            appendLog('PeerConnection not available to handle offer.', 'system');
+            return;
           }
           
-          const pc = pcRef.current!;
           await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sdpParsed.data.sdp }));
           
           while (iceCandidateQueueRef.current.length > 0) {
@@ -140,68 +241,9 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
       appendLog('WebSocket disconnected.', 'system');
       wsRef.current = null;
     };
-  };
+  }, [wsUrl, appendLog, initCall, cleanupCall]);
 
-  const initCall = () => {
-    if (pcRef.current) return;
-
-    const pc = new RTCPeerConnection();
-    pcRef.current = pc;
-    iceCandidateQueueRef.current = [];
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          session_id: sessionIdRef.current,
-          candidate: event.candidate.candidate,
-          sdpMid: event.candidate.sdpMid
-        }));
-      }
-    };
-
-    pc.ontrack = (event) => {
-      appendLog('Received remote media track from partner.', 'system');
-      if (remoteAudioRef.current) {
-        if (event.streams && event.streams.length > 0) {
-          remoteAudioRef.current.srcObject = event.streams[0];
-        } else {
-          remoteAudioRef.current.srcObject = new MediaStream([event.track]);
-        }
-      }
-    };
-
-    appendLog('Requesting microphone access...', 'system');
-    micPromiseRef.current = navigator.mediaDevices.getUserMedia({ 
-      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true } 
-    }).then(stream => {
-      streamRef.current = stream;
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-      appendLog('Microphone access granted.', 'system');
-    }).catch(err => {
-      appendLog(`Failed to access microphone: ${err}`, 'system');
-    });
-
-    return micPromiseRef.current;
-  };
-
-  const cleanupCall = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    if (pcRef.current) {
-      pcRef.current.close();
-      pcRef.current = null;
-    }
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = null;
-    }
-    micPromiseRef.current = null;
-    iceCandidateQueueRef.current = [];
-    setIsInCall(false);
-  }, []);
-
-  const connectToPeer = async (targetId: string) => {
+  const connectToPeer = useCallback(async (targetId: string) => {
     if (!isInCall && sessionIdRef.current) {
       appendLog(`Dialing session ID: ${targetId}...`, 'sent');
       try {
@@ -223,9 +265,9 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
         cleanupCall();
       }
     }
-  };
+  }, [isInCall, apiUrl, appendLog, cleanupCall]);
 
-  const stopCall = async () => {
+  const stopCall = useCallback(async () => {
     if (sessionIdRef.current) {
       try {
         await axios.post(`${apiUrl}/api/end_call`, { 
@@ -241,7 +283,7 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
     }
     cleanupCall();
     appendLog('Microphone access released and call ended.', 'system');
-  };
+  }, [apiUrl, appendLog, cleanupCall]);
 
   return { messages, isConnected, sessionId, isInCall, connectToServer, stopCall, connectToPeer };
 };
