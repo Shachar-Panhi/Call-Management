@@ -1,18 +1,25 @@
 #pragma once
 
+#include "PeerConnection.hpp"
+
 #include <memory>
-#include <vector>
+#include <string>
+#include <unordered_map>
+
 
 namespace CAM::API {
     class PeerConnection;
 
     class PeerConnectionManager {
     public: 
-        explicit PeerConnectionManager();
-        void join(const std::shared_ptr<PeerConnection>& peer);
-        void leave(const std::shared_ptr<PeerConnection>& peer);
+        PeerConnectionManager();
+        void add(const std::shared_ptr<PeerConnection>& peer, const std::string& session_id);
+        void remove(const std::string& session_id);
+        
+        bool contains(const std::string& session_id) const;
+        std::shared_ptr<PeerConnection> get_peer(const std::string& session_id) const;
         
     private:    
-        std::vector<std::shared_ptr<PeerConnection>> peers_;
+        std::unordered_map<std::string, std::shared_ptr<PeerConnection>> peers_;
     };
 }

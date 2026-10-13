@@ -1,66 +1,41 @@
-#include  "coordinator.hpp"
+#include "coordinator.hpp"
 #include "../utils/Utils.hpp"
+#include "../utils/JsonUtils.hpp"
+#include "types.hpp"
 
-
-#include <functional>
 #include <utility>
 
 namespace CAM::API {
-    Coordinator::Coordinator(std::shared_ptr<WebsocketManager> ws_manager, std::shared_ptr<PeerConnectionManager> pc_manager) 
-    : ws_manager_(std::move(ws_manager)), pc_manager_(std::move(pc_manager)) {}
+    Coordinator::Coordinator(std::shared_ptr<WebsocketManager> ws_manager,
+        std::shared_ptr<PeerConnectionManager> pc_manager, std::shared_ptr<BridgeManager> bridge_manager)
+    : ws_manager_(std::move(ws_manager)), pc_manager_(std::move(pc_manager)),
+        bridge_manager_(std::move(bridge_manager)),
+        router_(ws_manager_, pc_manager_, bridge_manager_, *this) {}
 
-    WebsocketSession::SessionCallback Coordinator::get_join_callback() {
-        return [weak_manager = std::weak_ptr<WebsocketManager>(ws_manager_)](const std::shared_ptr<WebsocketSession>& session) {
-            if (auto locked = weak_manager.lock()) {
-                locked->join(session);
-            }
-        };
-    }
-
-    WebsocketSession::SessionCallback Coordinator::get_leave_callback() {
-        return [weak_manager = std::weak_ptr<WebsocketManager>(ws_manager_)](const std::shared_ptr<WebsocketSession>& session) {
-            if (auto locked = weak_manager.lock()) {
-                locked->leave(session);
-            }
-        };
-    }
-
-    PeerConnection::PeerCallback Coordinator::get_peer_join_callback() {
-        return [weak_manager = std::weak_ptr<PeerConnectionManager>(pc_manager_)](const std::shared_ptr<PeerConnection>& session) {
-            if (auto locked = weak_manager.lock()) {
-                locked->join(session);
-            }
-        };
-    }
-
-    PeerConnection::PeerCallback Coordinator::get_peer_leave_callback() {
-        return [weak_manager = std::weak_ptr<PeerConnectionManager>(pc_manager_)](const std::shared_ptr<PeerConnection>& session) {
-            if (auto locked = weak_manager.lock()) {
-                locked->leave(session);
-            }
-        };
-    }
-
-    Callback Coordinator::process_callback() {
-        auto on_join = get_join_callback();
-        auto on_leave = get_leave_callback();
-        auto on_peer_join = get_peer_join_callback();
-        auto on_peer_leave = get_peer_leave_callback();
-
-        return [on_join, on_leave, on_peer_join, on_peer_leave](TCP::socket socket, HTTP::request<HTTP::string_body> req) {
+    WsCallback Coordinator::process_ws_callback() {
+        return [this](TCP::socket socket, HTTP::request<HTTP::string_body> req) {
             auto executor = socket.get_executor();
             
             auto session_id = CAM::Utils::generate_session_id();
+            
+            auto on_peer_join = [](const std::shared_ptr<PeerConnection>&) {};
+            auto on_peer_leave = [this, session_id](const std::shared_ptr<PeerConnection>&) {
+                disconnect_session(session_id);
+            };
+
             auto peer_connection = std::make_shared<PeerConnection>(on_peer_join, on_peer_leave, session_id);
 
-            auto linked_session_leave = [on_leave, weak_peer = std::weak_ptr<PeerConnection>(peer_connection)](const std::shared_ptr<WebsocketSession>& session) {
-                on_leave(session);
-                if (auto peer = weak_peer.lock()) {
-                    peer->close();
-                }
+            auto on_ws_join = [](const std::shared_ptr<WebsocketSession>&) {};
+            auto on_ws_leave = [this, session_id](const std::shared_ptr<WebsocketSession>&) {
+                disconnect_session(session_id);
+                ws_manager_->remove(session_id);
+                pc_manager_->remove(session_id);
             };
-            auto websocket_session = std::make_shared<WebsocketSession>(std::move(socket), on_join, linked_session_leave, session_id);
+            
+            auto websocket_session = std::make_shared<WebsocketSession>(std::move(socket), on_ws_join, on_ws_leave, session_id);
 
+            ws_manager_->add(websocket_session, session_id);
+            pc_manager_->add(peer_connection, session_id);
 
             peer_connection->set_signaling_callback([weak_ws = std::weak_ptr<WebsocketSession>(websocket_session)](std::string msg) {
                 if (auto websocket = weak_ws.lock()) {
@@ -72,9 +47,41 @@ namespace CAM::API {
                 peer->handle_signaling_message(msg);
             });
 
-            peer_connection->initialize_webrtc();
-
             boost::asio::co_spawn(executor, websocket_session->start(std::move(req)), boost::asio::detached);
         };
+    }
+
+    ApiCallback Coordinator::process_http_callback() {
+        return [this](const HTTP::request<HTTP::string_body>& req) -> HTTP::response<HTTP::string_body> {
+            return router_.route(req);
+        };
+    }
+
+    void Coordinator::disconnect_session(const std::string& session_id) {
+        if (pc_manager_->contains(session_id)) {
+            pc_manager_->get_peer(session_id)->close();
+        }
+
+        if (bridge_manager_->contains(session_id)) {
+            std::string partner_id = bridge_manager_->get_partner(session_id);
+            bridge_manager_->remove_bridge(session_id);
+
+            if (pc_manager_->contains(partner_id)) {
+                pc_manager_->get_peer(partner_id)->close();
+            }
+
+            spdlog::info("Call ended between {} and {}", session_id, partner_id);
+
+            if (ws_manager_->contains(partner_id)) {
+                ApiResponsePacket partner_res;
+                partner_res.action = "disconnect";
+                partner_res.status = "partner_disconnected";
+
+                auto json_str = CAM::Utils::serialize_json(partner_res);
+                if (json_str) {
+                    ws_manager_->get_session(partner_id)->dispatch_message(json_str.value());
+                }
+            }
+        }
     }
 }

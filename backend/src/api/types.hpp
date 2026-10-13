@@ -18,4 +18,19 @@ namespace CAM::API {
         std::string candidate;
         std::optional<std::string> sdpMid;
     };
+
+    struct HttpCallRequest {
+        std::string session_id;
+        std::string target_session_id;
+    };
+
+    struct HttpEndCallRequest {
+        std::string session_id;
+    };
+
+    struct ApiResponsePacket {
+        std::string type = "api_response";
+        std::string action;
+        std::string status;
+    };
 }
