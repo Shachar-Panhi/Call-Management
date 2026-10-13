@@ -34,7 +34,17 @@ FetchContent_Declare(
     URL https://github.com/stephenberry/glaze/archive/refs/tags/v7.9.1.zip
 )
 
-FetchContent_MakeAvailable(boost libdatachannel spdlog glaze)
+set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    opus
+    GIT_REPOSITORY https://github.com/xiph/opus.git
+    GIT_TAG        v1.5.2
+    GIT_SHALLOW    TRUE
+)
+
+FetchContent_MakeAvailable(boost libdatachannel spdlog glaze opus)
 
 find_package(OpenSSL REQUIRED)
 add_executable(backend "src/main.cpp" "src/api/Listener.cpp" "src/api/WebsocketSession.cpp"
@@ -51,4 +61,5 @@ target_link_libraries(backend PRIVATE
     glaze::glaze
     OpenSSL::SSL
     OpenSSL::Crypto
+    Opus::opus
 )
