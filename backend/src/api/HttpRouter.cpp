@@ -78,6 +78,11 @@ namespace CAM::API {
         auto pc1 = pc_manager_->get_peer(session_id);
         auto pc2 = pc_manager_->get_peer(target_id);
 
+        if (!pc1 || !pc2) {
+            return make_json_response(HTTP::status::not_found,
+                R"({"status":"failed"})", req.version(), req.keep_alive());
+        }
+
         std::shared_ptr<Bridge> bridge = std::make_shared<Bridge>(pc1, pc2, session_id, target_id);
         bridge_manager_->add_bridge(bridge);
         bridge->setup_routing();
