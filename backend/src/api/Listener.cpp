@@ -20,10 +20,24 @@ namespace CAM::API {
         }
 
         errc = acceptor_.open(endpoint.protocol(), errc);
-        errc = acceptor_.set_option(boost::asio::socket_base::reuse_address(true), errc);
-        errc = acceptor_.bind(endpoint, errc);
-        errc = acceptor_.listen(boost::asio::socket_base::max_listen_connections, errc);
+        if (errc) {
+            spdlog::error("failed to start server: {}", errc.message());
+            co_return;
+        }
 
+        errc = acceptor_.set_option(boost::asio::socket_base::reuse_address(true), errc);
+        if (errc) {
+            spdlog::error("failed to start server: {}", errc.message());
+            co_return;
+        }
+        
+        errc = acceptor_.bind(endpoint, errc);
+        if (errc) {
+            spdlog::error("failed to start server: {}", errc.message());
+            co_return;
+        }
+
+        errc = acceptor_.listen(boost::asio::socket_base::max_listen_connections, errc);
         if (errc) {
             spdlog::error("failed to start server: {}", errc.message());
             co_return;
