@@ -15,7 +15,8 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 FetchContent_Declare(
     boost
-    URL https://github.com/boostorg/boost/releases/download/boost-1.91.0-1/boost-1.91.0-1-cmake.zip
+    GIT_REPOSITORY https://github.com/boostorg/boost.git
+    GIT_TAG boost-1.92.0
 )
 
 FetchContent_Declare(
@@ -26,12 +27,14 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     spdlog
-    URL https://github.com/gabime/spdlog/archive/refs/tags/v1.17.0.zip
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.17.0
 )
 
 FetchContent_Declare(
     glaze
-    URL https://github.com/stephenberry/glaze/archive/refs/tags/v7.9.1.zip
+    GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+    GIT_TAG        v9.0.0
 )
 
 set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
