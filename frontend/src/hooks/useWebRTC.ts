@@ -196,6 +196,14 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
           }
 
           const answer = await pc.createAnswer();
+
+          if (answer.sdp) {
+            answer.sdp = answer.sdp.replace(
+              /(a=fmtp:\d+[^\r\n]*)/,
+              '$1;maxaveragebitrate=64000'
+            );
+          }
+
           await pc.setLocalDescription(answer);
           
           ws.send(JSON.stringify({ 

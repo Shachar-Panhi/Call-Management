@@ -98,7 +98,7 @@ namespace CAM::API {
             size_t end_of_line = sdp.find("\r\n", fmtp_pos);
             
             if (end_of_line != std::string::npos) {
-                sdp.insert(end_of_line, ";maxplaybackrate=16000;sprop-maxcapturerate=16000");
+                sdp.insert(end_of_line, ";maxplaybackrate=16000;sprop-maxcapturerate=16000;maxaveragebitrate=64000");
             }
         }
         
