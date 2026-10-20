@@ -199,12 +199,48 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
 
           if (answer.sdp) {
             answer.sdp = answer.sdp.replace(
-              /(a=fmtp:\d+[^\r\n]*)/,
-              '$1;maxaveragebitrate=64000'
+              /(a=fmtp:\d+)(.*?)(?:\r\n|$)/,
+              (_match, prefix, params) => {
+                let p = params;
+                const setParam = (key: string, value: string) => {
+                  const regex = new RegExp(`;?${key}=\\w+`, 'g');
+                  p = p.replace(regex, '');
+                  p += `;${key}=${value}`;
+                };
+                setParam('cbr', '1');
+                setParam('maxaveragebitrate', '64000');
+                setParam('ptime', '20');
+                setParam('minptime', '20');
+                setParam('maxptime', '20');
+                setParam('usedtx', '0');
+                setParam('stereo', '0');
+                setParam('sprop-stereo', '0');
+                setParam('maxplaybackrate', '16000');
+                setParam('sprop-maxcapturerate', '16000');
+                return `${prefix}${p}\r\n`;
+              }
             );
+
+            if (!answer.sdp.includes('a=ptime:')) {
+              answer.sdp = answer.sdp.replace(
+                /(m=audio[^\r\n]*\r\n)/,
+                '$1a=ptime:20\r\na=maxptime:20\r\n'
+              );
+            }
           }
 
           await pc.setLocalDescription(answer);
+
+          const senders = pc.getSenders();
+          for (const sender of senders) {
+            if (sender.track?.kind === 'audio') {
+              const params = sender.getParameters();
+              if (params.encodings && params.encodings.length > 0) {
+                params.encodings[0].maxBitrate = 64000;
+                sender.setParameters(params).catch(() => {});
+              }
+            }
+          }
           
           ws.send(JSON.stringify({ 
             session_id: sessionIdRef.current,

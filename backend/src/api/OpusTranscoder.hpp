@@ -6,7 +6,6 @@
 #include <memory>
 #include <span>
 #include <string>
-#include <vector>
 
 #include <opus.h>
 
@@ -20,10 +19,16 @@ namespace CAM::API {
 
         static constexpr int kSampleRate = 16000; // 16kHz is the default for human speech processing
         static constexpr int kChannels = 1; // one channel means no distinction between left and right speakers, like in a phone call
-        static constexpr int kFrameSize = 160; // standard for human speech processing at 16kHz. 160 samples means 10ms of audio
-        static constexpr int kBitrate = 64000; // pretty low bitrate but sufficent for human speech.
-        static constexpr int kMaxPacketSize = 4000; // safety size so the encoding/decoding don't fail if the packet is too big
+        static constexpr int kBitrate = 64000; // 64kbps provides high-fidelity wideband speech
+        static constexpr int kFrameDurationMs = 20; // 20ms is the standard VoIP/WebRTC frame duration
 
+        // calculated array sizes for 20ms duration:
+        // sample rate: 16k -> 16000 * 20 / 1000 = 320 samples (decoded payload)
+        static constexpr int kDecodedPacketSize = (kSampleRate * kFrameDurationMs) / 1000;
+        static constexpr int kFrameSize = kDecodedPacketSize; // 320 samples
+
+        // bit rate: 64k -> (64000 * 20) / (8 * 1000) = 160 bytes (encoded payload)
+        static constexpr int kEncodedPacketSize = (kBitrate * kFrameDurationMs) / (8 * 1000);
 
         // constructors according to the rule of 5. we want to be able to move the OpusTranscoder but not copy it, since it contains unique_ptrs
         ~OpusTranscoder() = default;
@@ -37,11 +42,11 @@ namespace CAM::API {
 
         static std::expected<OpusTranscoder, std::string> create();
 
-        std::expected<std::vector<uint8_t>, std::string> // takes float and returns a uint-8 vector
-        encode(const std::array<float, kFrameSize>& pcm_input); // frame size is always 160 which means we can put the pcm input in a fixed array cause it's not dynamic
+        std::expected<std::array<uint8_t, kEncodedPacketSize>, std::string> // takes decoded float span and returns fixed uint-8 array
+        encode(std::span<const float> decoded_packet); // receives a span of decoded pcm audio (320 samples)
 
-        std::expected<std::array<float, kFrameSize>, std::string> // takes a uint-8 span and returns float. once again, we can return a fixed array becuase frame size doesn't change.
-        decode(std::span<const uint8_t> opus_packet);
+        std::expected<std::array<float, kDecodedPacketSize>, std::string> // takes encoded uint-8 span and returns fixed float array
+        decode(std::span<const uint8_t> encoded_packet); // receives a span of encoded opus packet (160 bytes)
 
     private:
         // private constructor to enforce the use of create() and prevent exceptions

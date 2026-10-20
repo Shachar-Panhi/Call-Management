@@ -1,6 +1,6 @@
 #include "OpusTranscoder.hpp"
 
-#include <algorithm>
+// #include <algorithm>
 #include <format>
 #include <spdlog/spdlog.h>
 #include <utility>
@@ -20,7 +20,6 @@ namespace CAM::API {
 
         if (error != OPUS_OK) {
             auto err_msg = std::format("Failed to create OpusEncoder: {}", opus_strerror(error));
-            spdlog::error(err_msg);
             return std::unexpected(std::move(err_msg));
             // the unexpected is a string used to represent the error message.
         }
@@ -31,7 +30,6 @@ namespace CAM::API {
 
         if (error != OPUS_OK) {
             auto err_msg = std::format("Failed to create OpusDecoder: {}", opus_strerror(error));
-            spdlog::error(err_msg);
             return std::unexpected(std::move(err_msg));
         }
 
@@ -45,10 +43,10 @@ namespace CAM::API {
         opus_encoder_ctl(encoder.get(), OPUS_SET_BITRATE(kBitrate)); //NOLINT
         // this is to set the bit rate which we defined in the hpp file.
 
-        opus_encoder_ctl(encoder.get(), OPUS_SET_VBR(1)); //NOLINT
+        opus_encoder_ctl(encoder.get(), OPUS_SET_VBR(0)); //NOLINT
         // 0 means CBR, 1 means VBR
         // CBR is for constant packet size, VBR is for dynamically changing packet size.
-        // we want VBR because it's better for human speech processing since speech is dynamic.
+        // we use CBR so that every encoded packet fits the calculated fixed 160 bytes (64kbps * 20ms / 8).
 
         opus_encoder_ctl(encoder.get(), OPUS_SET_MAX_BANDWIDTH(OPUS_BANDWIDTH_WIDEBAND)); //NOLINT
         // WIDEBAND means maximum of 8kHz frequency range. 
@@ -65,36 +63,46 @@ namespace CAM::API {
         // we also need to tell the encoder how much packet loss we expect there to be. 
         // 5% is a good guesstimate and we can increase it if we want the system to work in worse network conditions.
 
-        opus_encoder_ctl(encoder.get(), OPUS_SET_DTX(1)); //NOLINT
-        // this enables discontinuous transmission which means that when there's silence, the encoder will save bandwidth by not sending packets.
-        // this is important because there's a lot of silence during calls since most of the time only one side is speaking.
+        opus_encoder_ctl(encoder.get(), OPUS_SET_DTX(0)); //NOLINT
+        // 0 disables discontinuous transmission so constant 160-byte packets are sent continuously without drops during silence.
 
-        spdlog::info("OpusTranscoder created: sample_rate={}, channels={}, frame_size={}, bitrate={}",
-                     kSampleRate, kChannels, kFrameSize, kBitrate);
+        opus_encoder_ctl(encoder.get(), OPUS_SET_EXPERT_FRAME_DURATION(OPUS_FRAMESIZE_20_MS)); //NOLINT
+        // explicitly enforces 20ms frame duration for all encoded packets.
+
+        spdlog::info("OpusTranscoder created: sample_rate={}, channels={}, decoded_samples={}, encoded_bytes={}, bitrate={}",
+                     kSampleRate, kChannels, kDecodedPacketSize, kEncodedPacketSize, kBitrate);
 
         return OpusTranscoder(std::move(encoder), std::move(decoder));
         // returns the transcoder because the constructor is private.
     }
 
-    std::expected<std::vector<uint8_t>, std::string>
-    OpusTranscoder::encode(const std::array<float, kFrameSize>& pcm_input) {
+    std::expected<std::array<uint8_t, OpusTranscoder::kEncodedPacketSize>, std::string>
+    OpusTranscoder::encode(std::span<const float> decoded_packet) {
+        if (decoded_packet.size() != kDecodedPacketSize) {
+            return std::unexpected(
+                std::format("Decoded packet size mismatch: expected {} samples (20ms), got {}",
+                            kDecodedPacketSize, decoded_packet.size()));
+        }
+
+        /*
         //check if the input is in range of the float samples that are used for human speech processing.
-        const bool out_of_bounds = std::ranges::any_of(pcm_input, [](float sample) {
+        const bool out_of_bounds = std::ranges::any_of(decoded_packet, [](float sample) {
             return sample < -1.0F || sample > 1.0F;
         });
 
         if (out_of_bounds) {
             return std::unexpected("PCM sample out of range [-1.0, 1.0]");
         }
+        */
 
-        std::array<uint8_t, kMaxPacketSize> output{};
+        std::array<uint8_t, kEncodedPacketSize> output{};
 
         const int encoded_bytes = opus_encode_float(
             encoder_.get(),
-            pcm_input.data(),
-            kFrameSize,
+            decoded_packet.data(),
+            kDecodedPacketSize,
             output.data(),
-            kMaxPacketSize);
+            kEncodedPacketSize);
 
         // if we couldn't encode the packet then there won't be any encoded bytes.
         if (encoded_bytes < 0) {
@@ -102,23 +110,19 @@ namespace CAM::API {
                 std::format("opus_encode_float failed: {}", opus_strerror(encoded_bytes)));
         }
 
-        // the span streches from the start of the array to the end of the encoded bytes.
-        std::span<const uint8_t> packet_view(output.data(), static_cast<size_t>(encoded_bytes));
-        
-        // we need a vector because the packet size is dynamic so we can't use an array like what we did in the pcm input.
-        return std::vector<uint8_t>(packet_view.begin(), packet_view.end());
+        return output;
     }
 
-    std::expected<std::array<float, OpusTranscoder::kFrameSize>, std::string>
-    OpusTranscoder::decode(std::span<const uint8_t> opus_packet) {
-        std::array<float, kFrameSize> output{};
+    std::expected<std::array<float, OpusTranscoder::kDecodedPacketSize>, std::string>
+    OpusTranscoder::decode(std::span<const uint8_t> encoded_packet) {
+        std::array<float, kDecodedPacketSize> output{};
 
         const int decoded_samples = opus_decode_float(
             decoder_.get(),
-            opus_packet.empty() ? nullptr : opus_packet.data(), // make sure we don't pass an empty packet
-            static_cast<opus_int32>(opus_packet.size()),
+            encoded_packet.empty() ? nullptr : encoded_packet.data(), // make sure we don't pass an empty packet
+            static_cast<opus_int32>(encoded_packet.size()),
             output.data(),
-            kFrameSize,
+            kDecodedPacketSize,
             0);
 
         // if we couldn't decode the packet then there won't be any decoded samples.
@@ -127,12 +131,21 @@ namespace CAM::API {
                 std::format("opus_decode_float failed: {}", opus_strerror(decoded_samples)));
         }
 
-        // go over all 160 samples individually
+        // ensure decoded packet duration exactly matches our expected 20ms frame
+        if (decoded_samples != kDecodedPacketSize) {
+            return std::unexpected(
+                std::format("Decoded sample count mismatch: expected {} (20ms), got {}",
+                            kDecodedPacketSize, decoded_samples));
+        }
+
+        /*
+        // go over all 320 samples individually
         std::ranges::for_each(output, [](float& sample) {
             sample = std::clamp(sample, -1.0F, 1.0F);
             // makes all of the samples be in range.
             // if a sample is below -1.0 or above 1.0 then it will automatically be set to -1.0 or 1.0 respectively.
         });
+        */
 
         return output;
     }
