@@ -14,6 +14,7 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string>('');
   const [isInCall, setIsInCall] = useState<boolean>(false);
+  const [isPttActive, setIsPttActive] = useState<boolean>(false);
   
   const isMountedRef = useRef<boolean>(true);
   const wsRef = useRef<WebSocket | null>(null);
@@ -24,6 +25,8 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
   const sessionIdRef = useRef<string>('');
   const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const pttActiveRef = useRef<boolean>(false);
+  const isInCallRef = useRef<boolean>(false);
 
   const appendLog = useCallback((text: string, type: MessageType) => {
     if (!isMountedRef.current) return;
@@ -49,8 +52,74 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
     iceCandidateQueueRef.current = [];
     if (isMountedRef.current) {
       setIsInCall(false);
+      isInCallRef.current = false;
     }
   }, []);
+
+  const startPtt = useCallback(async () => {
+    if (!sessionIdRef.current || !isInCallRef.current || pttActiveRef.current) return;
+    pttActiveRef.current = true;
+    setIsPttActive(true);
+    try {
+      await axios.post(`${apiUrl}/api/ptt/start`, {
+        session_id: sessionIdRef.current,
+      });
+      appendLog('PTT activated — audio is being buffered.', 'system');
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        appendLog(`PTT start failed: ${err.response?.data?.status || err.message}`, 'system');
+      } else {
+        appendLog(`PTT start failed: ${err}`, 'system');
+      }
+      pttActiveRef.current = false;
+      setIsPttActive(false);
+    }
+  }, [apiUrl, appendLog]);
+
+  const stopPtt = useCallback(async () => {
+    if (!sessionIdRef.current || !pttActiveRef.current) return;
+    pttActiveRef.current = false;
+    setIsPttActive(false);
+    try {
+      await axios.post(`${apiUrl}/api/ptt/stop`, {
+        session_id: sessionIdRef.current,
+      });
+      appendLog('PTT released — buffered audio sent.', 'system');
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        appendLog(`PTT stop failed: ${err.response?.data?.status || err.message}`, 'system');
+      } else {
+        appendLog(`PTT stop failed: ${err}`, 'system');
+      }
+    }
+  }, [apiUrl, appendLog]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.code === 'Space') {
+        e.preventDefault();
+        if (!pttActiveRef.current && isInCallRef.current) {
+          startPtt();
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' || e.key === 'Control') {
+        if (pttActiveRef.current) {
+          stopPtt();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [startPtt, stopPtt]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -165,6 +234,7 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
           
           if (action === 'match') {
             setIsInCall(true);
+            isInCallRef.current = true;
             appendLog(`Partner matched! Status: ${status}. Waiting for WebRTC initialization...`, 'system');
             await initCall();
           } else if (action === 'disconnect') {
@@ -329,5 +399,5 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
     appendLog('Microphone access released and call ended.', 'system');
   }, [apiUrl, appendLog, cleanupCall]);
 
-  return { messages, isConnected, sessionId, isInCall, connectToServer, stopCall, connectToPeer };
+  return { messages, isConnected, sessionId, isInCall, isPttActive, connectToServer, stopCall, connectToPeer };
 };

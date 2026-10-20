@@ -12,7 +12,7 @@ namespace CAM::API {
         std::shared_ptr<BridgeManager> bridge_manager,
         Coordinator& coordinator)
     : ws_manager_(std::move(ws_manager)), pc_manager_(std::move(pc_manager)),
-        bridge_manager_(std::move(bridge_manager)), coordinator_(coordinator) {}
+        bridge_manager_(std::move(bridge_manager)), coordinator_(&coordinator) {}
 
     HTTP::response<HTTP::string_body> HttpRouter::make_json_response(
         HTTP::status status, const std::string& body, unsigned version, bool keep_alive)
@@ -37,6 +37,14 @@ namespace CAM::API {
 
         if (req.target() == "/api/end_call" && req.method() == HTTP::verb::post) {
             return handle_end_call(req);
+        }
+
+        if (req.target() == "/api/ptt/start" && req.method() == HTTP::verb::post) {
+            return handle_ptt_start(req);
+        }
+
+        if (req.target() == "/api/ptt/stop" && req.method() == HTTP::verb::post) {
+            return handle_ptt_stop(req);
         }
 
         return make_json_response(HTTP::status::bad_request,
@@ -112,7 +120,9 @@ namespace CAM::API {
         }
 
         std::string session_id = body.value().session_id;
-        coordinator_.disconnect_session(session_id);
+        if (coordinator_ != nullptr) {
+            coordinator_->disconnect_session(session_id);
+        }
 
         ApiResponsePacket response;
         response.action = "disconnect";
@@ -122,6 +132,46 @@ namespace CAM::API {
         if (json_str && ws_manager_->contains(session_id)) {
             ws_manager_->get_session(session_id)->dispatch_message(json_str.value());
         }
+
+        return make_json_response(HTTP::status::ok,
+            R"({"status":"success"})", req.version(), req.keep_alive());
+    }
+
+    HTTP::response<HTTP::string_body> HttpRouter::handle_ptt_start(const HTTP::request<HTTP::string_body>& req) {
+        auto body = CAM::Utils::parse_json<HttpPttRequest>(req.body());
+        if (!body) {
+            return make_json_response(HTTP::status::bad_request,
+                R"({"status":"invalid_body"})", req.version(), req.keep_alive());
+        }
+
+        std::string session_id = body.value().session_id;
+
+        if (!bridge_manager_->contains(session_id)) {
+            return make_json_response(HTTP::status::not_found,
+                R"({"status":"not_in_call"})", req.version(), req.keep_alive());
+        }
+
+        bridge_manager_->start_ptt(session_id);
+
+        return make_json_response(HTTP::status::ok,
+            R"({"status":"success"})", req.version(), req.keep_alive());
+    }
+
+    HTTP::response<HTTP::string_body> HttpRouter::handle_ptt_stop(const HTTP::request<HTTP::string_body>& req) {
+        auto body = CAM::Utils::parse_json<HttpPttRequest>(req.body());
+        if (!body) {
+            return make_json_response(HTTP::status::bad_request,
+                R"({"status":"invalid_body"})", req.version(), req.keep_alive());
+        }
+
+        std::string session_id = body.value().session_id;
+
+        if (!bridge_manager_->contains(session_id)) {
+            return make_json_response(HTTP::status::not_found,
+                R"({"status":"not_in_call"})", req.version(), req.keep_alive());
+        }
+
+        bridge_manager_->stop_ptt(session_id);
 
         return make_json_response(HTTP::status::ok,
             R"({"status":"success"})", req.version(), req.keep_alive());

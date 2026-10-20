@@ -1,6 +1,7 @@
 #pragma once 
 
 #include "PeerConnection.hpp"
+#include "PTTHandler.hpp"
 
 #include <string>
 #include <memory>
@@ -17,10 +18,16 @@ namespace CAM::API {
         const std::string& get_session1() const;
         const std::string& get_session2() const;
 
+        void start_ptt(const std::string& session_id);
+        void stop_ptt(const std::string& session_id);
+
     private:
         std::weak_ptr<PeerConnection> peer1_;
         std::weak_ptr<PeerConnection> peer2_;
         std::string session1_id_;
         std::string session2_id_;
+
+        std::unique_ptr<PTTHandler> ptt_handler1_;
+        std::unique_ptr<PTTHandler> ptt_handler2_;
     };
 }
