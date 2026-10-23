@@ -47,7 +47,13 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 
-FetchContent_MakeAvailable(boost libdatachannel spdlog glaze opus)
+FetchContent_Declare(
+    whisper
+    GIT_REPOSITORY https://github.com/ggml-org/whisper.cpp.git
+    GIT_TAG        v1.9.5
+)
+
+FetchContent_MakeAvailable(boost libdatachannel spdlog glaze opus whisper)
 
 find_package(OpenSSL REQUIRED)
 add_executable(backend "src/main.cpp" "src/api/Listener.cpp" "src/api/WebsocketSession.cpp"
