@@ -47,12 +47,17 @@ namespace CAM::API {
             return false;
         }
 
-        // In-place zero-allocation RTP parsing using RtpPacketView
-        auto* raw_bytes = reinterpret_cast<const uint8_t*>(packet.data());
-        std::span<uint8_t> span(const_cast<uint8_t*>(raw_bytes), packet.size());
+        if (packet.size() > RtpCpp::kMaxRtpPacketSize || packet.empty()) {
+            spdlog::warn("[{}] PTT: Invalid RTP packet size ({})", session_id_, packet.size());
+            return true;
+        }
 
-        RtpCpp::RtpPacketView rtp;
-        auto parse_res = rtp.parse(span);
+        // Stack-allocated in-place parsing without heap allocation or unsafe casts
+        std::array<uint8_t, RtpCpp::kMaxRtpPacketSize> buffer{};
+        std::memcpy(buffer.data(), packet.data(), packet.size());
+
+        RtpCpp::StaticRtpPacket rtp(buffer);
+        auto parse_res = rtp.parse(packet.size());
         if (parse_res != RtpCpp::Result::kSuccess) {
             spdlog::warn("[{}] PTT: Failed to parse RTP packet, dropping", session_id_);
             return true;
