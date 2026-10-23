@@ -3,7 +3,7 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { MessageList } from './components/MessageList';
 
 export default function App() {
-  const { messages, isConnected, sessionId, isInCall, connectToServer, stopCall, connectToPeer } = useWebRTC('ws://127.0.0.1:8080', 'http://127.0.0.1:8080');
+  const { messages, isConnected, sessionId, isInCall, isPttActive, connectToServer, stopCall, connectToPeer } = useWebRTC('ws://127.0.0.1:8080', 'http://127.0.0.1:8080');
   const [targetId, setTargetId] = useState('');
   const [hasCopied, setHasCopied] = useState(false);
 
@@ -28,6 +28,16 @@ export default function App() {
           >
             {hasCopied ? 'Copied' : 'Copy'}
           </button>
+        </div>
+      )}
+
+      {isInCall && (
+        <div className={`mb-4 p-3 rounded font-mono text-sm text-center font-semibold ${
+          isPttActive 
+            ? 'bg-red-100 text-red-800 border border-red-300' 
+            : 'bg-gray-100 text-gray-600 border border-gray-300'
+        }`}>
+          {isPttActive ? '🔴 PTT Active — Buffering Audio' : 'Hold Ctrl + Space for PTT'}
         </div>
       )}
 

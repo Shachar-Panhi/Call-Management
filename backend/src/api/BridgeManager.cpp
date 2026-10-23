@@ -27,4 +27,20 @@ namespace CAM::API  {
         }
         return "";
     }
+
+    bool BridgeManager::start_ptt(const std::string& session_id) {
+        if (!bridged_sessions_.contains(session_id)) {
+            return false;
+        }
+        bridged_sessions_.at(session_id)->start_ptt(session_id);
+        return true;
+    }
+
+    bool BridgeManager::stop_ptt(const std::string& session_id) {
+        if (!bridged_sessions_.contains(session_id)) {
+            return false;
+        }
+        bridged_sessions_.at(session_id)->stop_ptt(session_id);
+        return true;
+    }
 }

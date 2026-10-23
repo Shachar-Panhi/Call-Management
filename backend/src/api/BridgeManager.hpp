@@ -15,6 +15,9 @@ namespace CAM::API {
         
         bool contains(const std::string& session_id) const;
         std::string get_partner(const std::string& session_id) const;
+
+        bool start_ptt(const std::string& session_id);
+        bool stop_ptt(const std::string& session_id);
         
     private:
         std::unordered_map<std::string, std::shared_ptr<Bridge>> bridged_sessions_;

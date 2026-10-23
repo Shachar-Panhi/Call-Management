@@ -55,7 +55,7 @@ add_executable(backend "src/main.cpp" "src/api/Listener.cpp" "src/api/WebsocketS
 "src/api/HttpRouter.cpp"
 "src/api/PeerConnection.cpp" "src/api/PeerConnectionManager.cpp" "src/ThirdParty/RtpCpp/SmallVector.cpp"
 "src/api/Bridge.cpp" "src/api/BridgeManager.cpp"
-"src/api/OpusTranscoder.cpp")
+"src/api/OpusTranscoder.cpp" "src/api/PTTHandler.cpp")
 target_link_libraries(backend PRIVATE 
     Boost::asio
     Boost::beast

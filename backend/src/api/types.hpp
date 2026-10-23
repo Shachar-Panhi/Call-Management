@@ -5,32 +5,36 @@
 
 namespace CAM::API {
     struct ConnectionPacket {
-        std::string session_id;
+        std::string session_id; //NOLINT
     };
 
     struct SdpOfferPacket {
-        std::string session_id;
-        std::string sdp;
+        std::string session_id; //NOLINT
+        std::string sdp; //NOLINT
     };
 
     struct IceOfferPacket {
-        std::string session_id;
-        std::string candidate;
-        std::optional<std::string> sdpMid;
+        std::string session_id; //NOLINT
+        std::string candidate; //NOLINT
+        std::optional<std::string> sdpMid; //NOLINT
     };
 
     struct HttpCallRequest {
-        std::string session_id;
-        std::string target_session_id;
+        std::string session_id; //NOLINT
+        std::string target_session_id; //NOLINT
     };
 
     struct HttpEndCallRequest {
-        std::string session_id;
+        std::string session_id; //NOLINT
+    };
+
+    struct HttpPttRequest {
+        std::string session_id; //NOLINT
     };
 
     struct ApiResponsePacket {
-        std::string type = "api_response";
-        std::string action;
-        std::string status;
+        std::string type = "api_response"; //NOLINT
+        std::string action; //NOLINT
+        std::string status; //NOLINT
     };
 }

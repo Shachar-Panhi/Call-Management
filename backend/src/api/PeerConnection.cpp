@@ -98,7 +98,17 @@ namespace CAM::API {
             size_t end_of_line = sdp.find("\r\n", fmtp_pos);
             
             if (end_of_line != std::string::npos) {
-                sdp.insert(end_of_line, ";maxplaybackrate=16000;sprop-maxcapturerate=16000;maxaveragebitrate=64000");
+                sdp.insert(end_of_line, ";maxplaybackrate=16000;sprop-maxcapturerate=16000;maxaveragebitrate=64000;cbr=1;usedtx=0;ptime=20;minptime=20;maxptime=20;stereo=0;sprop-stereo=0");
+            }
+        }
+
+        if (!sdp.contains("a=ptime:")) {
+            size_t m_pos = sdp.find("m=audio");
+            if (m_pos != std::string::npos) {
+                size_t m_end = sdp.find("\r\n", m_pos);
+                if (m_end != std::string::npos) {
+                    sdp.insert(m_end + 2, "a=ptime:20\r\na=maxptime:20\r\n");
+                }
             }
         }
         
