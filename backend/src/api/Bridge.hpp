@@ -2,6 +2,7 @@
 
 #include "PeerConnection.hpp"
 #include "PTTHandler.hpp"
+#include "STTHandler.hpp"
 
 #include <string>
 #include <memory>
@@ -9,7 +10,11 @@
 namespace CAM::API {
     class Bridge : public std::enable_shared_from_this<Bridge> {
     public:
-        Bridge(std::weak_ptr<PeerConnection> peer1, std::weak_ptr<PeerConnection> peer2, std::string session1_id, std::string session2_id);
+        Bridge(std::weak_ptr<PeerConnection> peer1,
+               std::weak_ptr<PeerConnection> peer2,
+               std::string session1_id,
+               std::string session2_id,
+               const std::shared_ptr<STTHandler>& stt_handler);
 
         bool contains(const std::string& session_id) const;
         std::string get_partner(const std::string& session_id) const;

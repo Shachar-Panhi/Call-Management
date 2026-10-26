@@ -1,21 +1,26 @@
 #include "PTTHandler.hpp"
 #include "../ThirdParty/RtpCpp/RtpPacket.hpp"
 
-#include <spdlog/spdlog.h>
+#include <algorithm>
 #include <cstring>
+#include <spdlog/spdlog.h>
 #include <utility>
 
 namespace CAM::API {
 
-    PTTHandler::PTTHandler(std::string session_id, OpusTranscoder transcoder) noexcept
-        : session_id_(std::move(session_id)), transcoder_(std::move(transcoder)) {}
+    PTTHandler::PTTHandler(std::string session_id, OpusTranscoder transcoder, std::shared_ptr<STTHandler> stt_handler) noexcept
+        : session_id_(std::move(session_id)),
+          transcoder_(std::move(transcoder)),
+          stt_handler_(std::move(stt_handler)) {}
 
-    std::expected<std::unique_ptr<PTTHandler>, std::string> PTTHandler::create(std::string session_id) {
+    std::expected<std::unique_ptr<PTTHandler>, std::string>
+    PTTHandler::create(std::string session_id, std::shared_ptr<STTHandler> stt_handler) {
         auto transcoder = OpusTranscoder::create();
         if (!transcoder) {
             return std::unexpected("PTTHandler: failed to create OpusTranscoder - " + transcoder.error());
         }
-        return std::unique_ptr<PTTHandler>(new PTTHandler(std::move(session_id), std::move(transcoder.value())));
+        return std::unique_ptr<PTTHandler>(
+            new PTTHandler(std::move(session_id), std::move(transcoder.value()), std::move(stt_handler)));
     }
 
     void PTTHandler::start() {
@@ -75,17 +80,26 @@ namespace CAM::API {
     }
 
     std::vector<rtc::binary> PTTHandler::stop_and_release() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!active_.exchange(false, std::memory_order_acq_rel)) {
-            return {};
+        std::vector<BufferedFrame> frames_to_process;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!active_.exchange(false, std::memory_order_acq_rel)) {
+                return {};
+            }
+            frames_to_process.swap(buffered_frames_);
         }
 
-        spdlog::info("[{}] PTT stopped - releasing {} frames", session_id_, buffered_frames_.size());
+        spdlog::info("[{}] PTT stopped - processing {} frames", session_id_, frames_to_process.size());
+
+        std::vector<float> contiguous_pcm;
+        contiguous_pcm.reserve(frames_to_process.size() * OpusTranscoder::kDecodedPacketSize);
 
         std::vector<rtc::binary> released;
-        released.reserve(buffered_frames_.size());
+        released.reserve(frames_to_process.size());
 
-        for (const auto& frame : buffered_frames_) {
+        for (const auto& frame : frames_to_process) {
+            std::ranges::copy(frame.pcm_, std::back_inserter(contiguous_pcm));
+
             auto encoded_res = transcoder_.encode(frame.pcm_);
             if (!encoded_res) {
                 spdlog::error("[{}] PTT: Failed to encode PCM frame: {}", session_id_, encoded_res.error());
@@ -111,7 +125,15 @@ namespace CAM::API {
             released.push_back(std::move(bin));
         }
 
-        buffered_frames_.clear();
+        if (stt_handler_ && !contiguous_pcm.empty()) {
+            auto transcript_res = stt_handler_->transcribe(contiguous_pcm);
+            if (transcript_res) {
+                spdlog::info("[{}] STT Transcription: {}", session_id_, transcript_res.value());
+            } else {
+                spdlog::error("[{}] STT Failed: {}", session_id_, transcript_res.error());
+            }
+        }
+
         return released;
     }
 

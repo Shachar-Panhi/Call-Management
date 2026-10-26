@@ -1,12 +1,20 @@
 #include "BridgeManager.hpp"
 
+#include <utility>
+
 namespace CAM::API {
 
-    BridgeManager::BridgeManager() = default;
+    BridgeManager::BridgeManager(std::shared_ptr<STTHandler> stt_handler)
+        : stt_handler_(std::move(stt_handler)) {}
 
-    void BridgeManager::add_bridge(const std::shared_ptr<Bridge>& bridge) {
-        bridged_sessions_[bridge->get_session1()] = bridge;
-        bridged_sessions_[bridge->get_session2()] = bridge;
+    void BridgeManager::create_bridge(const std::shared_ptr<PeerConnection>& pc1,
+                                      const std::shared_ptr<PeerConnection>& pc2,
+                                      const std::string& session1_id,
+                                      const std::string& session2_id) {
+        auto bridge = std::make_shared<Bridge>(pc1, pc2, session1_id, session2_id, stt_handler_);
+        bridged_sessions_[session1_id] = bridge;
+        bridged_sessions_[session2_id] = bridge;
+        bridge->setup_routing();
     }
 
     void BridgeManager::remove_bridge(const std::string& session_id) {

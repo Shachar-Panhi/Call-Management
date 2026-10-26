@@ -87,9 +87,7 @@ namespace CAM::API {
 
         spdlog::info("Call started between {} and {}", session_id, target_id);
 
-        auto bridge = std::make_shared<Bridge>(pc1, pc2, session_id, target_id);
-        bridge_manager_->add_bridge(bridge);
-        bridge->setup_routing();
+        bridge_manager_->create_bridge(pc1, pc2, session_id, target_id);
 
         ApiResponsePacket match_res{
             .action = "match",

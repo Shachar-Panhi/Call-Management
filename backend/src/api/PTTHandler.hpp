@@ -2,6 +2,7 @@
 
 #include "OpusTranscoder.hpp"
 #include "PeerConnection.hpp"
+#include "STTHandler.hpp"
 #include <rtc/rtc.hpp>
 
 #include <array>
@@ -26,7 +27,8 @@ namespace CAM::API {
 
     class PTTHandler {
     public:
-        static std::expected<std::unique_ptr<PTTHandler>, std::string> create(std::string session_id);
+        static std::expected<std::unique_ptr<PTTHandler>, std::string>
+        create(std::string session_id, std::shared_ptr<STTHandler> stt_handler);
 
         ~PTTHandler() = default;
 
@@ -40,10 +42,11 @@ namespace CAM::API {
         std::vector<rtc::binary> stop_and_release();
 
     private:
-        PTTHandler(std::string session_id, OpusTranscoder transcoder) noexcept;
+        PTTHandler(std::string session_id, OpusTranscoder transcoder, std::shared_ptr<STTHandler> stt_handler) noexcept;
 
         std::string session_id_;
         OpusTranscoder transcoder_;
+        std::shared_ptr<STTHandler> stt_handler_;
 
         std::mutex mutex_;
         std::atomic<bool> active_{false};
