@@ -50,65 +50,56 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
     }
     micPromiseRef.current = null;
     iceCandidateQueueRef.current = [];
+    pttActiveRef.current = false;
     if (isMountedRef.current) {
       setIsInCall(false);
+      setIsPttActive(false);
       isInCallRef.current = false;
     }
   }, []);
 
-  const startPtt = useCallback(async () => {
-    if (!sessionIdRef.current || !isInCallRef.current || pttActiveRef.current) return;
-    pttActiveRef.current = true;
-    setIsPttActive(true);
-    try {
-      await axios.post(`${apiUrl}/api/ptt/start`, {
-        session_id: sessionIdRef.current,
-      });
-      appendLog('PTT activated — audio is being buffered.', 'system');
-    } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        appendLog(`PTT start failed: ${err.response?.data?.status || err.message}`, 'system');
-      } else {
-        appendLog(`PTT start failed: ${err}`, 'system');
-      }
-      pttActiveRef.current = false;
-      setIsPttActive(false);
+  const setPtt = useCallback(async (active: boolean) => {
+    if (!sessionIdRef.current || !isInCallRef.current || pttActiveRef.current === active) {
+      return;
     }
-  }, [apiUrl, appendLog]);
 
-  const stopPtt = useCallback(async () => {
-    if (!sessionIdRef.current || !pttActiveRef.current) return;
-    pttActiveRef.current = false;
-    setIsPttActive(false);
+    pttActiveRef.current = active;
+    setIsPttActive(active);
+
     try {
-      await axios.post(`${apiUrl}/api/ptt/stop`, {
+      await axios.post(`${apiUrl}/api/ptt`, {
         session_id: sessionIdRef.current,
+        active,
       });
-      appendLog('PTT released — buffered audio sent.', 'system');
+      appendLog(
+        active ? 'PTT activated - audio is being buffered.' : 'PTT released - buffered audio sent.',
+        'system'
+      );
     } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        appendLog(`PTT stop failed: ${err.response?.data?.status || err.message}`, 'system');
-      } else {
-        appendLog(`PTT stop failed: ${err}`, 'system');
+      const errorMsg = axios.isAxiosError(err)
+        ? err.response?.data?.status || err.message
+        : String(err);
+      appendLog(`PTT ${active ? 'start' : 'stop'} failed: ${errorMsg}`, 'system');
+
+      if (active) {
+        pttActiveRef.current = false;
+        setIsPttActive(false);
       }
     }
   }, [apiUrl, appendLog]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       if (e.ctrlKey && e.code === 'Space') {
         e.preventDefault();
-        if (!pttActiveRef.current && isInCallRef.current) {
-          startPtt();
-        }
+        setPtt(true);
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.key === 'Control') {
-        if (pttActiveRef.current) {
-          stopPtt();
-        }
+        setPtt(false);
       }
     };
 
@@ -119,7 +110,7 @@ export const useWebRTC = (wsUrl: string, apiUrl: string) => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [startPtt, stopPtt]);
+  }, [setPtt]);
 
   useEffect(() => {
     isMountedRef.current = true;
