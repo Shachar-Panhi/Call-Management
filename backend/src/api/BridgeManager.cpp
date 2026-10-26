@@ -1,6 +1,6 @@
 #include "BridgeManager.hpp"
 
-namespace CAM::API  {
+namespace CAM::API {
 
     BridgeManager::BridgeManager() = default;
 
@@ -10,9 +10,10 @@ namespace CAM::API  {
     }
 
     void BridgeManager::remove_bridge(const std::string& session_id) {
-        if (bridged_sessions_.contains(session_id)) {
-            std::string partner_id = bridged_sessions_[session_id]->get_partner(session_id);
-            bridged_sessions_.erase(session_id);
+        auto iterator = bridged_sessions_.find(session_id);
+        if (iterator != bridged_sessions_.end()) {
+            std::string partner_id = iterator->second->get_partner(session_id);
+            bridged_sessions_.erase(iterator);
             bridged_sessions_.erase(partner_id);
         }
     }
@@ -22,25 +23,19 @@ namespace CAM::API  {
     }
 
     std::string BridgeManager::get_partner(const std::string& session_id) const {
-        if (bridged_sessions_.contains(session_id)) {
-            return bridged_sessions_.at(session_id)->get_partner(session_id);
+        auto iterator = bridged_sessions_.find(session_id);
+        if (iterator != bridged_sessions_.end()) {
+            return iterator->second->get_partner(session_id);
         }
         return "";
     }
 
-    bool BridgeManager::start_ptt(const std::string& session_id) {
-        if (!bridged_sessions_.contains(session_id)) {
-            return false;
+    bool BridgeManager::set_ptt(const std::string& session_id, bool active) {
+        auto iterator = bridged_sessions_.find(session_id);
+        const bool found = (iterator != bridged_sessions_.end());
+        if (found) {
+            iterator->second->set_ptt(session_id, active);
         }
-        bridged_sessions_.at(session_id)->start_ptt(session_id);
-        return true;
-    }
-
-    bool BridgeManager::stop_ptt(const std::string& session_id) {
-        if (!bridged_sessions_.contains(session_id)) {
-            return false;
-        }
-        bridged_sessions_.at(session_id)->stop_ptt(session_id);
-        return true;
+        return found;
     }
 }

@@ -1,4 +1,4 @@
-#pragma once 
+#pragma once
 
 #include "PeerConnection.hpp"
 #include "PTTHandler.hpp"
@@ -14,14 +14,17 @@ namespace CAM::API {
         bool contains(const std::string& session_id) const;
         std::string get_partner(const std::string& session_id) const;
         void setup_routing();
-        
+
         const std::string& get_session1() const;
         const std::string& get_session2() const;
 
-        void start_ptt(const std::string& session_id);
-        void stop_ptt(const std::string& session_id);
+        void set_ptt(const std::string& session_id, bool active);
 
     private:
+        void bind_peer_audio(const std::weak_ptr<PeerConnection>& source_peer,
+                             const std::weak_ptr<PeerConnection>& target_peer,
+                             const std::unique_ptr<PTTHandler>& ptt_handler);
+
         std::weak_ptr<PeerConnection> peer1_;
         std::weak_ptr<PeerConnection> peer2_;
         std::string session1_id_;
