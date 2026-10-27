@@ -18,6 +18,8 @@ namespace CAM::API {
                 std::format("Whisper model file not found: {}", model_path.string()));
         }
 
+        whisper_log_set([](enum ggml_log_level, const char*, void*) {}, nullptr);
+
         whisper_context_params cparams = whisper_context_default_params();
         cparams.use_gpu = use_gpu;
         cparams.flash_attn = true;
