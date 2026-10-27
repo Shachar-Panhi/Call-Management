@@ -6,6 +6,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <vector>
 
 #include <opus.h>
 
@@ -55,5 +56,7 @@ namespace CAM::API {
         
         EncoderHandle encoder_;
         DecoderHandle decoder_;
+
+        std::vector<float> sample_buffer_;
     };
 }

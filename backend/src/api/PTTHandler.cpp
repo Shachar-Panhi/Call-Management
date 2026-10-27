@@ -62,6 +62,9 @@ namespace CAM::API {
 
         auto decoded_res = transcoder_.decode(payload);
         if (!decoded_res) {
+            if (decoded_res.error() == "BUFFERING") {
+                return true; 
+            }
             spdlog::warn("[{}] PTT: Failed to decode Opus payload: {}", session_id_, decoded_res.error());
             return true;
         }

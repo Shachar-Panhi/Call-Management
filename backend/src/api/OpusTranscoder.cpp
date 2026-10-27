@@ -115,13 +115,13 @@ namespace CAM::API {
 
     std::expected<std::array<float, OpusTranscoder::kDecodedPacketSize>, std::string>
     OpusTranscoder::decode(std::span<const uint8_t> encoded_packet) {
-        std::array<float, kDecodedPacketSize> output{};
+        std::array<float, kDecodedPacketSize> temp_output{};
 
         const int decoded_samples = opus_decode_float(
             decoder_.get(),
-            encoded_packet.empty() ? nullptr : encoded_packet.data(), // make sure we don't pass an empty packet
+            encoded_packet.empty() ? nullptr : encoded_packet.data(),
             static_cast<opus_int32>(encoded_packet.size()),
-            output.data(),
+            temp_output.data(),
             kDecodedPacketSize,
             0);
 
@@ -131,12 +131,6 @@ namespace CAM::API {
                 std::format("opus_decode_float failed: {}", opus_strerror(decoded_samples)));
         }
 
-        // ensure decoded packet duration exactly matches our expected 20ms frame
-        if (decoded_samples != kDecodedPacketSize) {
-            return std::unexpected(
-                std::format("Decoded sample count mismatch: expected {} (20ms), got {}",
-                            kDecodedPacketSize, decoded_samples));
-        }
 
         /*
         // go over all 320 samples individually
@@ -147,6 +141,24 @@ namespace CAM::API {
         });
         */
 
-        return output;
+
+
+        if (decoded_samples == kDecodedPacketSize && sample_buffer_.empty()) {
+            return temp_output;
+        }
+
+        sample_buffer_.insert(sample_buffer_.end(), temp_output.begin(), temp_output.begin() + decoded_samples);
+
+        if (sample_buffer_.size() >= kDecodedPacketSize) {
+            std::array<float, kDecodedPacketSize> full_frame{};
+            std::copy_n(sample_buffer_.begin(), kDecodedPacketSize, full_frame.begin());
+            
+            // Remove the consumed samples from the buffer
+            sample_buffer_.erase(sample_buffer_.begin(), sample_buffer_.begin() + kDecodedPacketSize);
+            
+            return full_frame;
+        }
+
+        return std::unexpected("BUFFERING");
     }
 }
