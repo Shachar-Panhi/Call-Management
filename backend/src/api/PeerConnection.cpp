@@ -65,8 +65,9 @@ namespace CAM::API {
     void PeerConnection::setup_media_tracks() {
         rtc::Description::Audio media("audio", rtc::Description::Direction::SendRecv);
         media.addOpusCodec(kOpusPayloadType);
-        
+
         audio_track_ = rtc_connection_->addTrack(media);
+        audio_track_->setMediaHandler(std::make_shared<rtc::RtcpReceivingSession>());
 
         rtc_connection_->setLocalDescription();
     }

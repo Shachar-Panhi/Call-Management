@@ -49,6 +49,11 @@ namespace CAM::API {
             return true;
         }
 
+        const auto& header = rtp.get_header();
+        if (header.payload_type_ != PeerConnection::kOpusPayloadType) {
+            return false;
+        }
+
         auto payload = rtp.payload();
         if (payload.empty()) {
             spdlog::warn("[{}] PTT: Empty RTP payload", session_id_);
@@ -63,15 +68,14 @@ namespace CAM::API {
         auto decoded_res = transcoder_.decode(payload);
         if (!decoded_res) {
             if (decoded_res.error() == "BUFFERING") {
-                return true; 
+                return true;
             }
             spdlog::warn("[{}] PTT: Failed to decode Opus payload: {}", session_id_, decoded_res.error());
             return true;
         }
 
-        const auto& header = rtp.get_header();
         buffered_frames_.push_back(BufferedFrame{
-            .pcm_ = decoded_res.value(),
+            .pcm_ = *decoded_res,
             .sequence_number_ = header.sequence_number_,
             .timestamp_ = header.timestamp_,
             .ssrc_ = header.ssrc_,
