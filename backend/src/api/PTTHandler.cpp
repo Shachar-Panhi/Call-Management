@@ -89,7 +89,10 @@ namespace CAM::API {
             audio_samples.swap(pcm_buffer_);
         }
 
-        spdlog::info("[{}] PTT stopped - transcribing {} samples", session_id_, audio_samples.size());
+        const double duration_sec = static_cast<double>(audio_samples.size()) / OpusTranscoder::kSampleRate;
+
+        spdlog::info("[{}] PTT stopped - transcribing {:.2f} seconds of audio with {} samples",
+                     session_id_, duration_sec, audio_samples.size());
 
         
         if (stt_handler_ && !audio_samples.empty()) {
