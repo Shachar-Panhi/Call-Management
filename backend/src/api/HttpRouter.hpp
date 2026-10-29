@@ -11,7 +11,6 @@
 namespace CAM::API {
     namespace HTTP = boost::beast::http;
 
-    // Forward declaration — Coordinator calls disconnect_session, and HttpRouter needs it.
     class Coordinator;
 
     class HttpRouter {
@@ -27,8 +26,7 @@ namespace CAM::API {
         static HTTP::response<HTTP::string_body> handle_options(const HTTP::request<HTTP::string_body>& req);
         HTTP::response<HTTP::string_body> handle_call(const HTTP::request<HTTP::string_body>& req);
         HTTP::response<HTTP::string_body> handle_end_call(const HTTP::request<HTTP::string_body>& req);
-        HTTP::response<HTTP::string_body> handle_ptt_start(const HTTP::request<HTTP::string_body>& req);
-        HTTP::response<HTTP::string_body> handle_ptt_stop(const HTTP::request<HTTP::string_body>& req);
+        HTTP::response<HTTP::string_body> handle_ptt(const HTTP::request<HTTP::string_body>& req);
 
         static HTTP::response<HTTP::string_body> make_json_response(HTTP::status status,
             const std::string& body, unsigned version, bool keep_alive);
@@ -39,4 +37,3 @@ namespace CAM::API {
         Coordinator* coordinator_ = nullptr;
     };
 }
-

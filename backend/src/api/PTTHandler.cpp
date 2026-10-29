@@ -1,66 +1,57 @@
 #include "PTTHandler.hpp"
 #include "../ThirdParty/RtpCpp/RtpPacket.hpp"
+#include "PeerConnection.hpp"
 
-#include <spdlog/spdlog.h>
 #include <cstring>
-#include <span>
+#include <spdlog/spdlog.h>
 #include <utility>
 
 namespace CAM::API {
 
-    PTTHandler::PTTHandler(std::string session_id, OpusTranscoder transcoder)
-        : session_id_(std::move(session_id)), transcoder_(std::move(transcoder)) {}
+    PTTHandler::PTTHandler(std::string session_id, OpusTranscoder transcoder, std::shared_ptr<STTHandler> stt_handler) noexcept
+        : session_id_(std::move(session_id)),
+          transcoder_(std::move(transcoder)),
+          stt_handler_(std::move(stt_handler)) {}
 
-    std::expected<std::unique_ptr<PTTHandler>, std::string> PTTHandler::create(std::string session_id) {
+    std::expected<std::unique_ptr<PTTHandler>, std::string>
+    PTTHandler::create(std::string session_id, std::shared_ptr<STTHandler> stt_handler) {
         auto transcoder = OpusTranscoder::create();
         if (!transcoder) {
-            return std::unexpected("PTTHandler: failed to create OpusTranscoder — " + transcoder.error());
+            return std::unexpected("PTTHandler: failed to create OpusTranscoder - " + transcoder.error());
         }
-        return std::make_unique<PTTHandler>(std::move(session_id), std::move(transcoder.value()));
+        return std::unique_ptr<PTTHandler>(
+            new PTTHandler(std::move(session_id), std::move(transcoder.value()), std::move(stt_handler)));
     }
 
     void PTTHandler::start() {
         std::lock_guard<std::mutex> lock(mutex_);
+        pcm_buffer_.clear();
         active_.store(true, std::memory_order_release);
-        buffered_frames_.clear();
-        spdlog::info("[{}] PTT started — buffering audio", session_id_);
-    }
-
-    void PTTHandler::stop() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        active_.store(false, std::memory_order_release);
-        spdlog::info("[{}] PTT stopped — {} frames buffered", session_id_, buffered_frames_.size());
-    }
-
-    bool PTTHandler::is_active() const noexcept {
-        return active_.load(std::memory_order_relaxed);
+        spdlog::info("[{}] PTT started", session_id_);
     }
 
     bool PTTHandler::process_packet(const rtc::binary& packet) {
-        // Fast path: lockless check when PTT is inactive
-        if (!active_.load(std::memory_order_relaxed)) {
+        if (!active_.load(std::memory_order_acquire)) {
             return false;
         }
 
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!active_.load(std::memory_order_relaxed)) {
-            return false;
-        }
-
-        if (packet.size() > RtpCpp::kMaxRtpPacketSize || packet.empty()) {
+        if (packet.empty() || packet.size() > RtpCpp::kMaxRtpPacketSize) {
             spdlog::warn("[{}] PTT: Invalid RTP packet size ({})", session_id_, packet.size());
             return true;
         }
 
-        // Stack-allocated in-place parsing without heap allocation or unsafe casts
         std::array<uint8_t, RtpCpp::kMaxRtpPacketSize> buffer{};
         std::memcpy(buffer.data(), packet.data(), packet.size());
 
         RtpCpp::StaticRtpPacket rtp(buffer);
-        auto parse_res = rtp.parse(packet.size());
-        if (parse_res != RtpCpp::Result::kSuccess) {
-            spdlog::warn("[{}] PTT: Failed to parse RTP packet, dropping", session_id_);
+        if (rtp.parse(packet.size()) != RtpCpp::Result::kSuccess) {
+            spdlog::warn("[{}] PTT: Failed to parse RTP packet", session_id_);
             return true;
+        }
+
+        const auto& header = rtp.get_header();
+        if (header.payload_type_ != PeerConnection::kOpusPayloadType) {
+            return false;
         }
 
         auto payload = rtp.payload();
@@ -69,68 +60,48 @@ namespace CAM::API {
             return true;
         }
 
-        // Decode ONLY the payload with the Opus transcoder
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!active_.load(std::memory_order_relaxed)) {
+            return false;
+        }
+
         auto decoded_res = transcoder_.decode(payload);
         if (!decoded_res) {
+            if (decoded_res.error() == "BUFFERING") {
+                return true;
+            }
             spdlog::warn("[{}] PTT: Failed to decode Opus payload: {}", session_id_, decoded_res.error());
             return true;
         }
 
-        const auto& header = rtp.get_header();
-        buffered_frames_.push_back(BufferedFrame{
-            .pcm_ = decoded_res.value(),
-            .sequence_number_ = header.sequence_number_,
-            .timestamp_ = header.timestamp_,
-            .ssrc_ = header.ssrc_,
-            .payload_type_ = header.payload_type_,
-            .is_marked_ = header.is_marked_
-        });
+        pcm_buffer_.insert(pcm_buffer_.end(), decoded_res->begin(), decoded_res->end());
 
         return true;
     }
 
-    std::vector<rtc::binary> PTTHandler::stop_and_release() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        active_.store(false, std::memory_order_release);
-        spdlog::info("[{}] PTT stopped — releasing {} buffered frames", session_id_, buffered_frames_.size());
-
-        std::vector<rtc::binary> released;
-        released.reserve(buffered_frames_.size());
-
-        for (const auto& frame : buffered_frames_) {
-            // Re-encode the decoded PCM samples back to Opus
-            auto encoded_res = transcoder_.encode(frame.pcm_);
-            if (!encoded_res) {
-                spdlog::error("[{}] PTT: Failed to encode PCM frame: {}", session_id_, encoded_res.error());
-                continue;
+    void PTTHandler::stop() {
+        std::vector<float> audio_samples;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!active_.exchange(false, std::memory_order_acq_rel)) {
+                return;
             }
-
-            // Reconstruct the RTP packet using stack-allocated StaticRtpPacket (no heap allocation)
-            RtpCpp::StaticRtpPacket rtp;
-            rtp.set_payload_type(frame.payload_type_);
-            rtp.set_sequence_number(frame.sequence_number_);
-            rtp.set_timestamp(frame.timestamp_);
-            rtp.set_ssrc(frame.ssrc_);
-            rtp.set_marker(frame.is_marked_);
-            (void)rtp.set_payload_size(OpusTranscoder::kEncodedPacketSize);
-
-            const auto& encoded_bytes = encoded_res.value();
-            std::memcpy(rtp.payload().data(), encoded_bytes.data(), OpusTranscoder::kEncodedPacketSize);
-
-            auto pkt_span = rtp.packet();
-            rtc::binary bin(pkt_span.size());
-            std::memcpy(bin.data(), pkt_span.data(), pkt_span.size());
-
-            released.push_back(std::move(bin));
+            audio_samples.swap(pcm_buffer_);
         }
 
-        buffered_frames_.clear();
-        return released;
-    }
+        const double duration_sec = static_cast<double>(audio_samples.size()) / OpusTranscoder::kSampleRate;
 
-    size_t PTTHandler::buffered_frame_count() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return buffered_frames_.size();
-    }
+        spdlog::info("[{}] PTT stopped - transcribing {:.2f} seconds of audio with {} samples",
+                     session_id_, duration_sec, audio_samples.size());
 
-} // namespace CAM::API
+        
+        if (stt_handler_ && !audio_samples.empty()) {
+            auto transcript_res = stt_handler_->transcribe(audio_samples);
+            if (transcript_res) {
+                spdlog::info("[{}] STT Transcription: {}", session_id_, transcript_res.value());
+            } else {
+                spdlog::error("[{}] STT Failed: {}", session_id_, transcript_res.error());
+            }
+        }
+    }
+}

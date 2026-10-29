@@ -65,8 +65,9 @@ namespace CAM::API {
     void PeerConnection::setup_media_tracks() {
         rtc::Description::Audio media("audio", rtc::Description::Direction::SendRecv);
         media.addOpusCodec(kOpusPayloadType);
-        
+
         audio_track_ = rtc_connection_->addTrack(media);
+        audio_track_->setMediaHandler(std::make_shared<rtc::RtcpReceivingSession>());
 
         rtc_connection_->setLocalDescription();
     }
@@ -116,7 +117,7 @@ namespace CAM::API {
     }
 
     void PeerConnection::handle_state(rtc::PeerConnection::State state) {
-        spdlog::info("[{}] Current WebRTC State: {}", session_id_, state_to_string(state));
+        spdlog::debug("[{}] Current WebRTC State: {}", session_id_, state_to_string(state));
 
         if (state == rtc::PeerConnection::State::Closed || 
             state == rtc::PeerConnection::State::Failed) {
@@ -189,7 +190,7 @@ namespace CAM::API {
 
         auto sdp_result = CAM::Utils::parse_json<SdpOfferPacket>(message);
         if (sdp_result) {
-            spdlog::info("[{}] Received WebRTC SDP Answer", session_id_);
+            spdlog::debug("[{}] Received WebRTC SDP Answer", session_id_);
             
             auto result = set_remote_description(sdp_result.value().sdp);
             if (!result.has_value()) {
@@ -200,7 +201,7 @@ namespace CAM::API {
 
         auto ice_result = CAM::Utils::parse_json<IceOfferPacket>(message);
         if (ice_result) {
-            spdlog::info("[{}] Received ICE Candidate", session_id_);
+            spdlog::debug("[{}] Received ICE Candidate", session_id_);
 
             auto result = set_remote_candidate(ice_result.value().candidate, ice_result.value().sdpMid.value_or(""));
             if (!result.has_value()) {
