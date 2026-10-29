@@ -1,13 +1,10 @@
 #pragma once
 
 #include "OpusTranscoder.hpp"
-#include "PeerConnection.hpp"
 #include "STTHandler.hpp"
 #include <rtc/rtc.hpp>
 
-#include <array>
 #include <atomic>
-#include <cstdint>
 #include <expected>
 #include <memory>
 #include <mutex>
@@ -15,15 +12,6 @@
 #include <vector>
 
 namespace CAM::API {
-
-    struct BufferedFrame {
-        std::array<float, OpusTranscoder::kDecodedPacketSize> pcm_{};
-        uint16_t sequence_number_ = 0;
-        uint32_t timestamp_ = 0;
-        uint32_t ssrc_ = 0;
-        uint8_t payload_type_ = PeerConnection::kOpusPayloadType;
-        bool is_marked_ = false;
-    };
 
     class PTTHandler {
     public:
@@ -38,8 +26,8 @@ namespace CAM::API {
         PTTHandler& operator=(PTTHandler&&) = delete;
 
         void start();
+        void stop();
         bool process_packet(const rtc::binary& packet);
-        std::vector<rtc::binary> stop_and_release();
 
     private:
         PTTHandler(std::string session_id, OpusTranscoder transcoder, std::shared_ptr<STTHandler> stt_handler) noexcept;
@@ -50,6 +38,6 @@ namespace CAM::API {
 
         std::mutex mutex_;
         std::atomic<bool> active_{false};
-        std::vector<BufferedFrame> buffered_frames_;
+        std::vector<float> pcm_buffer_;
     };
 }

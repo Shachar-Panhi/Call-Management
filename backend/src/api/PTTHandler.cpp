@@ -1,7 +1,7 @@
 #include "PTTHandler.hpp"
 #include "../ThirdParty/RtpCpp/RtpPacket.hpp"
+#include "PeerConnection.hpp"
 
-#include <algorithm>
 #include <cstring>
 #include <spdlog/spdlog.h>
 #include <utility>
@@ -25,7 +25,7 @@ namespace CAM::API {
 
     void PTTHandler::start() {
         std::lock_guard<std::mutex> lock(mutex_);
-        buffered_frames_.clear();
+        pcm_buffer_.clear();
         active_.store(true, std::memory_order_release);
         spdlog::info("[{}] PTT started", session_id_);
     }
@@ -74,74 +74,31 @@ namespace CAM::API {
             return true;
         }
 
-        buffered_frames_.push_back(BufferedFrame{
-            .pcm_ = *decoded_res,
-            .sequence_number_ = header.sequence_number_,
-            .timestamp_ = header.timestamp_,
-            .ssrc_ = header.ssrc_,
-            .payload_type_ = header.payload_type_,
-            .is_marked_ = header.is_marked_
-        });
+        pcm_buffer_.insert(pcm_buffer_.end(), decoded_res->begin(), decoded_res->end());
 
         return true;
     }
 
-    std::vector<rtc::binary> PTTHandler::stop_and_release() {
-        std::vector<BufferedFrame> frames_to_process;
+    void PTTHandler::stop() {
+        std::vector<float> audio_samples;
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (!active_.exchange(false, std::memory_order_acq_rel)) {
-                return {};
+                return;
             }
-            frames_to_process.swap(buffered_frames_);
+            audio_samples.swap(pcm_buffer_);
         }
 
-        spdlog::info("[{}] PTT stopped - processing {} frames", session_id_, frames_to_process.size());
+        spdlog::info("[{}] PTT stopped - transcribing {} samples", session_id_, audio_samples.size());
 
-        std::vector<float> contiguous_pcm;
-        contiguous_pcm.reserve(frames_to_process.size() * OpusTranscoder::kDecodedPacketSize);
-
-        std::vector<rtc::binary> released;
-        released.reserve(frames_to_process.size());
-
-        for (const auto& frame : frames_to_process) {
-            std::ranges::copy(frame.pcm_, std::back_inserter(contiguous_pcm));
-
-            auto encoded_res = transcoder_.encode(frame.pcm_);
-            if (!encoded_res) {
-                spdlog::error("[{}] PTT: Failed to encode PCM frame: {}", session_id_, encoded_res.error());
-                continue;
-            }
-
-            RtpCpp::StaticRtpPacket rtp;
-            rtp.set_payload_type(frame.payload_type_);
-            rtp.set_sequence_number(frame.sequence_number_);
-            rtp.set_timestamp(frame.timestamp_);
-            rtp.set_ssrc(frame.ssrc_);
-            rtp.set_marker(frame.is_marked_);
-            if (rtp.set_payload_size(OpusTranscoder::kEncodedPacketSize) != RtpCpp::Result::kSuccess) {
-                continue;
-            }
-
-            std::memcpy(rtp.payload().data(), encoded_res->data(), OpusTranscoder::kEncodedPacketSize);
-
-            auto pkt_span = rtp.packet();
-            rtc::binary bin(pkt_span.size());
-            std::memcpy(bin.data(), pkt_span.data(), pkt_span.size());
-
-            released.push_back(std::move(bin));
-        }
-
-        if (stt_handler_ && !contiguous_pcm.empty()) {
-            auto transcript_res = stt_handler_->transcribe(contiguous_pcm);
+        
+        if (stt_handler_ && !audio_samples.empty()) {
+            auto transcript_res = stt_handler_->transcribe(audio_samples);
             if (transcript_res) {
                 spdlog::info("[{}] STT Transcription: {}", session_id_, transcript_res.value());
             } else {
                 spdlog::error("[{}] STT Failed: {}", session_id_, transcript_res.error());
             }
         }
-
-        return released;
     }
-
 }

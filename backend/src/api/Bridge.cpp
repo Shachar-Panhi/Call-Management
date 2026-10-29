@@ -83,21 +83,14 @@ namespace CAM::API {
         }
 
         auto& handler = is_peer1 ? ptt_handler1_ : ptt_handler2_;
-        auto& target_peer = is_peer1 ? peer2_ : peer1_;
         if (!handler) {
             return;
         }
 
         if (active) {
             handler->start();
-            return;
-        }
-
-        auto packets = handler->stop_and_release();
-        if (auto target = target_peer.lock()) {
-            for (const auto& packet : packets) {
-                target->send_audio_packet(packet);
-            }
+        } else {
+            handler->stop();
         }
     }
 
