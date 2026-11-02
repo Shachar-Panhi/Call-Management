@@ -8,8 +8,9 @@
 
 int main() {
     constexpr auto kWhisperModelPath = WHISPER_MODEL_PATH;
+    constexpr auto kWhisperVadModelPath = WHISPER_VAD_MODEL_PATH;
 
-    auto stt_result = CAM::API::STTHandler::create(kWhisperModelPath);
+    auto stt_result = CAM::API::STTHandler::create(kWhisperModelPath, false, kWhisperVadModelPath);
     if (!stt_result) {
         spdlog::error("Startup failed: {}", stt_result.error());
         return 1;
