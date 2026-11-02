@@ -75,7 +75,8 @@ add_executable(backend "src/main.cpp" "src/api/Listener.cpp" "src/api/WebsocketS
 "src/api/OpusTranscoder.cpp" "src/api/PTTHandler.cpp" "src/api/STTHandler.cpp")
 
 target_compile_definitions(backend PRIVATE
-    WHISPER_MODEL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/models/ggml-base.en.bin"
+    WHISPER_MODEL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/models/ggml-tiny.en-q8_0.bin"
+    WHISPER_VAD_MODEL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/models/ggml-silero-v5.1.2.bin"
 )
 
 target_link_libraries(backend PRIVATE 
