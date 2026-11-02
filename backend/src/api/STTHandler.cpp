@@ -10,13 +10,16 @@ namespace CAM::API {
 
     STTHandler::STTHandler(ContextHandle context, std::string vad_model_path) noexcept
         : context_(std::move(context)),
-        vad_model_path_(std::move(vad_model_path)) {}
+          vad_model_path_(std::move(vad_model_path)) {}
 
-    std::expected< std::shared_ptr<STTHandler>, std::string >
+    STTHandler::~STTHandler() {
+        worker_pool_.join();
+    }
+
+    std::expected<std::shared_ptr<STTHandler>, std::string>
     STTHandler::create(const std::filesystem::path& model_path,
-                       bool use_gpu,
-                       const std::filesystem::path& vad_model_path) 
-        {
+                       const std::filesystem::path& vad_model_path,
+                       bool use_gpu) {
         if (!std::filesystem::exists(model_path)) {
             return std::unexpected(
                 std::format("Whisper model file not found: {}", model_path.string()));
@@ -41,18 +44,12 @@ namespace CAM::API {
         std::string valid_vad_path;
         if (!vad_model_path.empty() && std::filesystem::exists(vad_model_path)) {
             valid_vad_path = vad_model_path.string();
-            spdlog::info("Whisper Silero VAD model enabled: {}", valid_vad_path);
-        } else {
-            spdlog::info("Whisper Silero VAD model not found");
+            spdlog::info("Whisper VAD model enabled: {}", valid_vad_path);
         }
 
-       spdlog::info("Whisper STT initialized ({}). System optimizations: {}",
+        spdlog::info("Whisper STT initialized ({}). System optimizations: {}",
                      model_path.filename().string(),
                      whisper_print_system_info());
-
-        if (whisper_is_multilingual(ctx.get()) != 0) {
-            spdlog::warn("Loaded Whisper model is multilingual; an English-specific (.en) model is recommended");
-        }
 
         return std::shared_ptr<STTHandler>(
             new STTHandler(std::move(ctx), std::move(valid_vad_path)));
@@ -73,6 +70,9 @@ namespace CAM::API {
         wparams.translate = false;
         wparams.no_context = true;
         wparams.single_segment = true;
+        wparams.suppress_blank = true;
+        wparams.suppress_nst = true;
+        wparams.no_speech_thold = 0.6F; //NOLINT
         wparams.print_progress = false;
         wparams.print_realtime = false;
         wparams.print_special = false;
@@ -82,10 +82,6 @@ namespace CAM::API {
             wparams.vad = true;
             wparams.vad_model_path = vad_model_path_.c_str();
             wparams.vad_params = whisper_vad_default_params();
-            wparams.vad_params.threshold = 0.5f;
-            wparams.vad_params.min_speech_duration_ms = 150;
-            wparams.vad_params.min_silence_duration_ms = 100;
-            wparams.vad_params.speech_pad_ms = 100;
         }
 
         const int ret = whisper_full(
@@ -109,6 +105,17 @@ namespace CAM::API {
         }
 
         return transcript;
+    }
+
+    void STTHandler::transcribe_async(std::vector<float> pcm_samples, TranscribeCallback callback) {
+        boost::asio::post(worker_pool_, [self = shared_from_this(),
+                                         samples = std::move(pcm_samples),
+                                         callback = std::move(callback)]() {
+            auto result = self->transcribe(samples);
+            if (callback) {
+                callback(std::move(result));
+            }
+        });
     }
 
 }

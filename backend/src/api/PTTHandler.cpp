@@ -96,12 +96,16 @@ namespace CAM::API {
 
         
         if (stt_handler_ && !audio_samples.empty()) {
-            auto transcript_res = stt_handler_->transcribe(audio_samples);
-            if (transcript_res) {
-                spdlog::info("[{}] STT Transcription: {}", session_id_, transcript_res.value());
-            } else {
-                spdlog::error("[{}] STT Failed: {}", session_id_, transcript_res.error());
-            }
+            const std::string session_id = session_id_;
+            stt_handler_->transcribe_async(
+                std::move(audio_samples),
+                [session_id](std::expected<std::string, std::string> transcript_res) {
+                    if (!transcript_res) {
+                        spdlog::error("[{}] STT Failed: {}", session_id, transcript_res.error());
+                        return;
+                    }
+                    spdlog::info("[{}] STT Transcription: {}", session_id, *transcript_res);
+                });
         }
     }
 }
