@@ -78,6 +78,9 @@ namespace CAM::API {
         wparams.print_special = false;
         wparams.print_timestamps = false;
 
+        std::string initial_prompt = "Commands: reset, Reset. Mixing 15, mixing 80. AGC 0, AGC 10. Pitch-shift 0, Pitch-Shift -6, Pitch shift +3.";
+        wparams.initial_prompt = initial_prompt.c_str();
+
         if (!vad_model_path_.empty()) {
             wparams.vad = true;
             wparams.vad_model_path = vad_model_path_.c_str();
