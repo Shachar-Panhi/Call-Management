@@ -1,0 +1,124 @@
+#include "STTHandler.hpp"
+
+#include <algorithm>
+#include <format>
+#include <spdlog/spdlog.h>
+#include <thread>
+#include <utility>
+
+namespace CAM::API {
+
+    STTHandler::STTHandler(ContextHandle context, std::string vad_model_path) noexcept
+        : context_(std::move(context)),
+          vad_model_path_(std::move(vad_model_path)) {}
+
+    STTHandler::~STTHandler() {
+        worker_pool_.join();
+    }
+
+    std::expected<std::shared_ptr<STTHandler>, std::string>
+    STTHandler::create(const std::filesystem::path& model_path,
+                       const std::filesystem::path& vad_model_path,
+                       bool use_gpu) {
+        if (!std::filesystem::exists(model_path)) {
+            return std::unexpected(
+                std::format("Whisper model file not found: {}", model_path.string()));
+        }
+
+        whisper_log_set([](enum ggml_log_level, const char*, void*) {}, nullptr);
+
+        whisper_context_params cparams = whisper_context_default_params();
+        cparams.use_gpu = use_gpu;
+        cparams.flash_attn = true;
+
+        const std::string path_str = model_path.string();
+        ContextHandle ctx(
+            whisper_init_from_file_with_params(path_str.c_str(), cparams),
+            whisper_free);
+
+        if (!ctx) {
+            return std::unexpected(
+                std::format("Failed to initialize Whisper context from: {}", path_str));
+        }
+
+        std::string valid_vad_path;
+        if (!vad_model_path.empty() && std::filesystem::exists(vad_model_path)) {
+            valid_vad_path = vad_model_path.string();
+            spdlog::info("Whisper VAD model enabled: {}", valid_vad_path);
+        }
+
+        spdlog::info("Whisper STT initialized ({}). System optimizations: {}",
+                     model_path.filename().string(),
+                     whisper_print_system_info());
+
+        return std::shared_ptr<STTHandler>(
+            new STTHandler(std::move(ctx), std::move(valid_vad_path)));
+    }
+
+    std::expected<std::string, std::string>
+    STTHandler::transcribe(std::span<const float> pcm_samples) {
+        if (pcm_samples.empty()) {
+            return std::string{};
+        }
+
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        whisper_full_params wparams = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
+        const int max_threads = static_cast<int>(std::thread::hardware_concurrency());
+        wparams.n_threads = std::max(1, std::min(4, max_threads > 0 ? max_threads / 2 : 1));
+        wparams.language = "en";
+        wparams.translate = false;
+        wparams.no_context = true;
+        wparams.single_segment = true;
+        wparams.suppress_blank = true;
+        wparams.suppress_nst = true;
+        wparams.no_speech_thold = 0.6F; //NOLINT
+        wparams.print_progress = false;
+        wparams.print_realtime = false;
+        wparams.print_special = false;
+        wparams.print_timestamps = false;
+
+        std::string initial_prompt = "Commands: reset, Reset. Mixing 15, mixing 80. AGC 0, AGC 10. Pitch-shift 0, Pitch-Shift -6, Pitch shift +3.";
+        wparams.initial_prompt = initial_prompt.c_str();
+
+        if (!vad_model_path_.empty()) {
+            wparams.vad = true;
+            wparams.vad_model_path = vad_model_path_.c_str();
+            wparams.vad_params = whisper_vad_default_params();
+        }
+
+        const int ret = whisper_full(
+            context_.get(),
+            wparams,
+            pcm_samples.data(),
+            static_cast<int>(pcm_samples.size()));
+
+        if (ret != 0) {
+            return std::unexpected(std::format("whisper_full failed with code {}", ret));
+        }
+
+        const int n_segments = whisper_full_n_segments(context_.get());
+        std::string transcript;
+
+        for (int i = 0; i < n_segments; ++i) {
+            const char* segment_text = whisper_full_get_segment_text(context_.get(), i);
+            if (segment_text != nullptr) {
+                transcript += segment_text;
+            }
+        }
+
+        return transcript;
+    }
+
+    void STTHandler::transcribe_async(std::vector<float> pcm_samples, TranscribeCallback callback) {
+        boost::asio::post(worker_pool_, [self = shared_from_this(),
+                                         samples = std::move(pcm_samples),
+                                         callback = std::move(callback)]() {
+            auto result = self->transcribe(samples);
+            if (callback) {
+                callback(std::move(result));
+            }
+        });
+    }
+
+}

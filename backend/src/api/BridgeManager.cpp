@@ -1,18 +1,27 @@
 #include "BridgeManager.hpp"
 
-namespace CAM::API  {
+#include <utility>
 
-    BridgeManager::BridgeManager() = default;
+namespace CAM::API {
 
-    void BridgeManager::add_bridge(const std::shared_ptr<Bridge>& bridge) {
-        bridged_sessions_[bridge->get_session1()] = bridge;
-        bridged_sessions_[bridge->get_session2()] = bridge;
+    BridgeManager::BridgeManager(std::shared_ptr<STTHandler> stt_handler)
+        : stt_handler_(std::move(stt_handler)) {}
+
+    void BridgeManager::create_bridge(const std::shared_ptr<PeerConnection>& pc1,
+                                      const std::shared_ptr<PeerConnection>& pc2,
+                                      const std::string& session1_id,
+                                      const std::string& session2_id) {
+        auto bridge = std::make_shared<Bridge>(pc1, pc2, session1_id, session2_id, stt_handler_);
+        bridged_sessions_[session1_id] = bridge;
+        bridged_sessions_[session2_id] = bridge;
+        bridge->setup_routing();
     }
 
     void BridgeManager::remove_bridge(const std::string& session_id) {
-        if (bridged_sessions_.contains(session_id)) {
-            std::string partner_id = bridged_sessions_[session_id]->get_partner(session_id);
-            bridged_sessions_.erase(session_id);
+        auto iterator = bridged_sessions_.find(session_id);
+        if (iterator != bridged_sessions_.end()) {
+            std::string partner_id = iterator->second->get_partner(session_id);
+            bridged_sessions_.erase(iterator);
             bridged_sessions_.erase(partner_id);
         }
     }
@@ -22,25 +31,19 @@ namespace CAM::API  {
     }
 
     std::string BridgeManager::get_partner(const std::string& session_id) const {
-        if (bridged_sessions_.contains(session_id)) {
-            return bridged_sessions_.at(session_id)->get_partner(session_id);
+        auto iterator = bridged_sessions_.find(session_id);
+        if (iterator != bridged_sessions_.end()) {
+            return iterator->second->get_partner(session_id);
         }
         return "";
     }
 
-    bool BridgeManager::start_ptt(const std::string& session_id) {
-        if (!bridged_sessions_.contains(session_id)) {
-            return false;
+    bool BridgeManager::set_ptt(const std::string& session_id, bool active) {
+        auto iterator = bridged_sessions_.find(session_id);
+        const bool found = (iterator != bridged_sessions_.end());
+        if (found) {
+            iterator->second->set_ptt(session_id, active);
         }
-        bridged_sessions_.at(session_id)->start_ptt(session_id);
-        return true;
-    }
-
-    bool BridgeManager::stop_ptt(const std::string& session_id) {
-        if (!bridged_sessions_.contains(session_id)) {
-            return false;
-        }
-        bridged_sessions_.at(session_id)->stop_ptt(session_id);
-        return true;
+        return found;
     }
 }

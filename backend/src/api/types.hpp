@@ -30,6 +30,7 @@ namespace CAM::API {
 
     struct HttpPttRequest {
         std::string session_id; //NOLINT
+        bool active = false; //NOLINT
     };
 
     struct ApiResponsePacket {

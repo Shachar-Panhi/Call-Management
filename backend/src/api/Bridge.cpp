@@ -5,25 +5,31 @@
 #include <utility>
 
 namespace CAM::API {
-    Bridge::Bridge(std::weak_ptr<PeerConnection> peer1, std::weak_ptr<PeerConnection> peer2,
-        std::string session1_id, std::string session2_id)
-    : peer1_(std::move(peer1)), peer2_(std::move(peer2)),
-        session1_id_(std::move(session1_id)), session2_id_(std::move(session2_id))
-    {
-        auto ptt1 = PTTHandler::create(session1_id_);
-        if (ptt1) {
-            ptt_handler1_ = std::move(ptt1.value());
-        } else {
-            spdlog::error("Failed to create PTTHandler for session {}: {}", session1_id_, ptt1.error());
-        }
-
-        auto ptt2 = PTTHandler::create(session2_id_);
-        if (ptt2) {
-            ptt_handler2_ = std::move(ptt2.value());
-        } else {
-            spdlog::error("Failed to create PTTHandler for session {}: {}", session2_id_, ptt2.error());
+    namespace {
+        std::unique_ptr<PTTHandler> init_ptt_handler(
+            const std::string& session_id,
+            const std::shared_ptr<STTHandler>& stt_handler)
+        {
+            auto ptt = PTTHandler::create(session_id, stt_handler);
+            if (!ptt) {
+                spdlog::error("Failed to create PTTHandler for session {}: {}", session_id, ptt.error());
+                return nullptr;
+            }
+            return std::move(ptt.value());
         }
     }
+
+    Bridge::Bridge(std::weak_ptr<PeerConnection> peer1,
+                   std::weak_ptr<PeerConnection> peer2,
+                   std::string session1_id,
+                   std::string session2_id,
+                   const std::shared_ptr<STTHandler>& stt_handler)
+        : peer1_(std::move(peer1)),
+          peer2_(std::move(peer2)),
+          session1_id_(std::move(session1_id)),
+          session2_id_(std::move(session2_id)),
+          ptt_handler1_(init_ptt_handler(session1_id_, stt_handler)),
+          ptt_handler2_(init_ptt_handler(session2_id_, stt_handler)) {}
 
     bool Bridge::contains(const std::string& session_id) const {
         return session1_id_ == session_id || session2_id_ == session_id;
@@ -32,71 +38,59 @@ namespace CAM::API {
     std::string Bridge::get_partner(const std::string& session_id) const {
         if (session1_id_ == session_id) {
             return session2_id_;
-        } else if (session2_id_ == session_id) {
+        }
+        if (session2_id_ == session_id) {
             return session1_id_;
         }
         return "";
     }
 
     void Bridge::setup_routing() {
-        if (auto pc1 = peer1_.lock()) {
-            pc1->set_audio_callback([weak_self = weak_from_this()](const rtc::binary& packet) {
-                auto self = weak_self.lock();
-                if (!self) {
-                    return;
-                }
-
-                if (self->ptt_handler1_ && self->ptt_handler1_->process_packet(packet)) {
-                    return;
-                }
-
-                if (auto pc2 = self->peer2_.lock()) {
-                    pc2->send_audio_packet(packet);
-                }
-            });
-        }
-
-        if (auto pc2 = peer2_.lock()) {
-            pc2->set_audio_callback([weak_self = weak_from_this()](const rtc::binary& packet) {
-                auto self = weak_self.lock();
-                if (!self) {
-                    return;
-                }
-
-                if (self->ptt_handler2_ && self->ptt_handler2_->process_packet(packet)) {
-                    return;
-                }
-
-                if (auto pc1 = self->peer1_.lock()) {
-                    pc1->send_audio_packet(packet);
-                }
-            });
-        }
+        bind_peer_audio(peer1_, peer2_, ptt_handler1_);
+        bind_peer_audio(peer2_, peer1_, ptt_handler2_);
     }
 
-    void Bridge::start_ptt(const std::string& session_id) {
-        if (session_id == session1_id_ && ptt_handler1_) {
-            ptt_handler1_->start();
-        } else if (session_id == session2_id_ && ptt_handler2_) {
-            ptt_handler2_->start();
+    void Bridge::bind_peer_audio(const std::weak_ptr<PeerConnection>& source_peer,
+                                 const std::weak_ptr<PeerConnection>& target_peer,
+                                 const std::unique_ptr<PTTHandler>& ptt_handler) {
+        auto source = source_peer.lock();
+        if (!source) {
+            return;
         }
+
+        PTTHandler* handler_ptr = ptt_handler.get();
+        source->set_audio_callback([weak_self = weak_from_this(), target_peer, handler_ptr](const rtc::binary& packet) {
+            auto self = weak_self.lock();
+            if (!self) {
+                return;
+            }
+
+            if (handler_ptr != nullptr && handler_ptr->process_packet(packet)) {
+                return;
+            }
+
+            if (auto target = target_peer.lock()) {
+                target->send_audio_packet(packet);
+            }
+        });
     }
 
-    void Bridge::stop_ptt(const std::string& session_id) {
-        if (session_id == session1_id_ && ptt_handler1_) {
-            auto packets = ptt_handler1_->stop_and_release();
-            if (auto pc2 = peer2_.lock()) {
-                for (const auto& packet : packets) {
-                    pc2->send_audio_packet(packet);
-                }
-            }
-        } else if (session_id == session2_id_ && ptt_handler2_) {
-            auto packets = ptt_handler2_->stop_and_release();
-            if (auto pc1 = peer1_.lock()) {
-                for (const auto& packet : packets) {
-                    pc1->send_audio_packet(packet);
-                }
-            }
+    void Bridge::set_ptt(const std::string& session_id, bool active) {
+        const bool is_peer1 = (session_id == session1_id_);
+        const bool is_peer2 = (session_id == session2_id_);
+        if (!is_peer1 && !is_peer2) {
+            return;
+        }
+
+        auto& handler = is_peer1 ? ptt_handler1_ : ptt_handler2_;
+        if (!handler) {
+            return;
+        }
+
+        if (active) {
+            handler->start();
+        } else {
+            handler->stop();
         }
     }
 
