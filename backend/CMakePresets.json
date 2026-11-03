@@ -45,6 +45,30 @@
       }
     },
     {
+      "name": "clang++-cpu",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "WHISPER_BACKEND": "CPU"
+      }
+    },
+    {
+      "name": "clang++-vulkan",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "WHISPER_BACKEND": "VULKAN"
+      }
+    },
+    {
+      "name": "clang++-cuda",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "WHISPER_BACKEND": "CUDA"
+      }
+    },
+    {
       "name": "clang++-release",
       "inherits": "base",
       "cacheVariables": {
