@@ -107,7 +107,20 @@ FetchContent_Declare(
     GIT_TAG        v1.9.5
 )
 
-FetchContent_MakeAvailable(boost libdatachannel spdlog glaze opus whisper)
+set(KISSFFT_DATATYPE "float" CACHE STRING "" FORCE)
+set(KISSFFT_STATIC OFF CACHE BOOL "" FORCE)
+set(KISSFFT_TEST OFF CACHE BOOL "" FORCE)
+set(KISSFFT_TOOLS OFF CACHE BOOL "" FORCE)
+set(KISSFFT_PKGCONFIG OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    kissfft
+    GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
+    GIT_TAG        131.2.0
+    GIT_SHALLOW    TRUE
+)
+
+FetchContent_MakeAvailable(boost libdatachannel spdlog glaze opus whisper kissfft)
 
 find_package(OpenSSL REQUIRED)
 
@@ -134,4 +147,5 @@ target_link_libraries(backend PRIVATE
     OpenSSL::Crypto
     Opus::opus
     whisper
+    kissfft::kissfft
 )
